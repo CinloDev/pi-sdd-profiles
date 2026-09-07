@@ -7,6 +7,8 @@ import {
   runInteractiveProfileSelect,
   type UiContext,
 } from "./src/ui.js";
+import { createSddProfilesModal } from "./src/modal.js";
+import { resolveAvailableModels } from "./src/models-resolver.js";
 
 export { SddProfileManager } from "./src/manager.js";
 export * from "./src/types.js";
@@ -78,6 +80,40 @@ export default function sddProfilesExtension(pi: any): void {
     }
   });
 
+  const openProfilesModalOrFallback = async (manager: SddProfileManager, boundCtx: UiContext) => {
+    if (typeof (boundCtx.ui as any)?.custom === "function") {
+      const availableModels = await resolveAvailableModels(boundCtx);
+      return (boundCtx.ui as any).custom(
+        (tui: any, theme: any, _keybindings: any, done: (result?: any) => void) =>
+          createSddProfilesModal({
+            manager,
+            availableModels,
+            theme,
+            tui,
+            onProfileActivated: async (p) => {
+              await syncActiveProfileToRuntime(p, boundCtx);
+            },
+            done: (res) => {
+              if (res?.action === "activated") {
+                boundCtx.ui?.notify?.(`Perfil SDD activado: ${res.profileName}`, "info");
+              }
+              done(res);
+            },
+          }),
+        {
+          overlay: true,
+          overlayOptions: {
+            anchor: "center",
+            width: "88%",
+            maxHeight: "85%",
+            minWidth: 60,
+          },
+        }
+      );
+    }
+    return runInteractiveProfileSelect(manager, boundCtx);
+  };
+
   // Main /sdd-profile command
   pi.registerCommand?.("sdd-profile", {
     description: "Gestionar y alternar perfiles de modelos SDD y subagentes (/sdd-profile [apply|save|list|show|delete])",
@@ -92,7 +128,7 @@ export default function sddProfilesExtension(pi: any): void {
       const trimmed = (args || "").trim();
 
       if (!trimmed) {
-        return runInteractiveProfileSelect(manager, boundCtx);
+        return openProfilesModalOrFallback(manager, boundCtx);
       }
 
       const parts = trimmed.split(/\s+/);
@@ -255,10 +291,16 @@ export default function sddProfilesExtension(pi: any): void {
 
   // Keyboard shortcut to open interactive selector (alt+s avoids conflict with Pi core alt+p model cycling)
   pi.registerShortcut?.("alt+s", {
-    description: "Abrir selector interactivo de perfiles SDD",
+    description: "Abrir ventana flotante de perfiles SDD",
     handler: async (ctx: UiContext) => {
       const manager = getManager(ctx);
-      await runInteractiveProfileSelect(manager, ctx);
+      const boundCtx: UiContext = {
+        ...ctx,
+        onProfileActivated: async (p) => {
+          await syncActiveProfileToRuntime(p, ctx);
+        },
+      };
+      await openProfilesModalOrFallback(manager, boundCtx);
     },
   });
 

@@ -8,16 +8,38 @@ Se integra de forma transparente y atómica con [`pi-subagents-j0k3r`](https://g
 
 ## Características
 
-- ⚡ **Cambio en caliente**: Alterná perfiles con `/sdd-profile` o el atajo de teclado `alt+s` sin reiniciar la sesión ni el agente.
+- 🪟 **Ventana Flotante Modal Interactiva**: Se abre centrada en la terminal (`alt+s` o `/sdd-profile`) sin borrar el historial ni salir del contexto.
+- ⚡ **Cambio en caliente**: Alterná perfiles y sincronizá el modelo de sesión y los subagentes al instante.
 - 📦 **Perfiles Estándar Incluidos**:
   - `balanced-default`: Equilibrio entre calidad y costo con Claude Sonnet 4.5 y Claude Haiku 4.5.
   - `deep-reasoning`: Máximo nivel de razonamiento (`max`/`high`) con OpenAI o3-mini en fases críticas de diseño y revisión.
   - `speed-economy`: Velocidad y costo mínimo para tareas ligeras e iteraciones directas.
-- 🎨 **Asistente Interactivo de Creación**: Creá tus propios perfiles con `[➕ Crear nuevo perfil...]` directamente desde el menú o por comando.
+- 🎨 **Cockpit Visual y Editor en Pantalla**: Navegá con flechas (`↑`/`↓`), activá con `Enter`, editá con `e`, asigná modelos por lote con `a` o `c`, y guardá con `s`.
+- 📋 **Descubrimiento Automático de Modelos**: Despliega todos los modelos configurados en tu Pi (`cpamc/...`, `opencode-go/...`, locales o remotos) sin escribir nada a mano.
 - 🛡️ **Escritura Atómica Segura**: Preserva 100% de la configuración de `subagents.json` (`timeout_ms`, `history_panel_shortcut`, `default_tools`, etc.) y previene escrituras corruptas vía archivos temporales y renombrado atómico.
 - 🌐 **Soporte Global y por Proyecto**: Tus perfiles personalizados se guardan localmente en `~/.pi/agent/profiles/` (globales) o en `.pi/profiles/` (del proyecto).
 - 🧠 **Skill Incluida**: Provee la skill `sdd-profiles` para que el orquestador y los agentes sepan gobernar y sugerir perfiles.
 - 🤖 **Herramientas para el Orquestador**: Expone `sdd_profile_list` y `sdd_profile_switch` como tools para que el orquestador pueda conmutar perfiles programáticamente cuando una fase lo requiera.
+
+---
+
+## Controles en la Ventana Flotante (`alt+s`)
+
+### Vista Principal (Lista de Perfiles)
+- `↑` / `↓` o `j` / `k`: Moverse entre los perfiles disponibles.
+- `Enter`: Activar el perfil seleccionado (actualiza subagentes y modelo de sesión).
+- `e`: Abrir el editor de modelos del perfil seleccionado.
+- `d`: Borrar perfil personalizado.
+- `Esc` o `q`: Cerrar la ventana flotante.
+
+### Vista de Edición (`e` dentro de un perfil)
+- `↑` / `↓`: Navegar por la lista de agentes.
+- `Enter` o `m`: Abrir selector flotante de modelos para el agente seleccionado.
+- `e`: Cambiar el nivel de esfuerzo de razonamiento.
+- `a`: Asignar un modelo a **TODOS** los agentes del perfil en un solo paso.
+- `c`: Asignar un modelo a una **Categoría** entera (Núcleo SDD, Judgment Day, Revisores).
+- `s`: Guardar los cambios del perfil.
+- `Esc`: Volver a la lista de perfiles.
 
 ---
 
