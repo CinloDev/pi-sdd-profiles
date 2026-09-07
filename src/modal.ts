@@ -410,6 +410,14 @@ export function createSddProfilesModal(input: ModalInput) {
           pickerIndex = Math.max(0, pickerIndex - 1);
         } else if (key === "down" || key === "j") {
           pickerIndex = Math.min(pickerItems.length - 1, pickerIndex + 1);
+        } else if (key === "pageup") {
+          pickerIndex = Math.max(0, pickerIndex - 5);
+        } else if (key === "pagedown") {
+          pickerIndex = Math.min(pickerItems.length - 1, pickerIndex + 5);
+        } else if (key === "home") {
+          pickerIndex = 0;
+        } else if (key === "end") {
+          pickerIndex = Math.max(0, pickerItems.length - 1);
         } else if (key === "enter") {
           const chosenModel = pickerItems[pickerIndex];
           if (chosenModel && editingProfile) {
@@ -553,6 +561,14 @@ export function createSddProfilesModal(input: ModalInput) {
           selectedAgentIndex = Math.max(0, selectedAgentIndex - 1);
         } else if (key === "down" || key === "j") {
           selectedAgentIndex = Math.min(editingAgentsList.length - 1, selectedAgentIndex + 1);
+        } else if (key === "pageup") {
+          selectedAgentIndex = Math.max(0, selectedAgentIndex - 5);
+        } else if (key === "pagedown") {
+          selectedAgentIndex = Math.min(editingAgentsList.length - 1, selectedAgentIndex + 5);
+        } else if (key === "home") {
+          selectedAgentIndex = 0;
+        } else if (key === "end") {
+          selectedAgentIndex = Math.max(0, editingAgentsList.length - 1);
         } else if (key === "enter" || key === "m") {
           const current = selectedAgent();
           stagedModel = undefined;
@@ -636,6 +652,14 @@ export function createSddProfilesModal(input: ModalInput) {
         selectedProfileIndex = Math.max(0, selectedProfileIndex - 1);
       } else if (key === "down" || key === "j") {
         selectedProfileIndex = Math.min(profiles.length - 1, selectedProfileIndex + 1);
+      } else if (key === "pageup") {
+        selectedProfileIndex = Math.max(0, selectedProfileIndex - 5);
+      } else if (key === "pagedown") {
+        selectedProfileIndex = Math.min(profiles.length - 1, selectedProfileIndex + 5);
+      } else if (key === "home") {
+        selectedProfileIndex = 0;
+      } else if (key === "end") {
+        selectedProfileIndex = Math.max(0, profiles.length - 1);
       } else if (key === "enter") {
         // Activate selected profile
         const target = selectedProfile();

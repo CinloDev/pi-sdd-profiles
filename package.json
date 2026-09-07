@@ -27,7 +27,8 @@
     "typecheck": "tsc --noEmit"
   },
   "peerDependencies": {
-    "@earendil-works/pi-coding-agent": "*"
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "^0.85.1"
   },
   "peerDependenciesMeta": {
     "@earendil-works/pi-coding-agent": {
@@ -35,6 +36,7 @@
     }
   },
   "devDependencies": {
+    "@earendil-works/pi-tui": "^0.85.1",
     "@types/node": "^22.13.0",
     "typescript": "^5.7.3",
     "vitest": "^3.0.5"

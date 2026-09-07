@@ -1,3 +1,5 @@
+import { matchesKey, Key } from "@earendil-works/pi-tui";
+
 export function stripTerminalEscapes(text: string): string {
   return text.replace(/\u001b\[[0-9;]*m/g, "").replace(/\u001b\][^\u001b]*(?:\u001b\\|\u0007)/g, "");
 }
@@ -82,16 +84,56 @@ export function frameModal(title: string, body: string[], width: number, theme?:
 }
 
 export function normalizeModalKey(data: string): string {
-  if (data === "\r" || data === "\n") return "enter";
-  if (data === "\u001b") return "esc";
-  if (data === "\u001b[A") return "up";
-  if (data === "\u001b[B") return "down";
-  if (data === "\u001b[C") return "right";
-  if (data === "\u001b[D") return "left";
-  if (data === "\u001b[H") return "home";
-  if (data === "\u001b[F") return "end";
-  if (data === "\u001b[5~") return "pageup";
-  if (data === "\u001b[6~") return "pagedown";
-  if (data === "\u007f" || data === "\b") return "backspace";
+  if (
+    matchesKey(data, Key.enter) ||
+    matchesKey(data, Key.return) ||
+    data === "\r" ||
+    data === "\n" ||
+    data === "\u001bOM"
+  ) {
+    return "enter";
+  }
+  if (matchesKey(data, Key.escape) || data === "\u001b") {
+    return "esc";
+  }
+  if (
+    matchesKey(data, Key.up) ||
+    data === "\u001b[A" ||
+    data === "\u001bOA" ||
+    data === "\u001b[1;1A" ||
+    data === "\u001b[a"
+  ) {
+    return "up";
+  }
+  if (
+    matchesKey(data, Key.down) ||
+    data === "\u001b[B" ||
+    data === "\u001bOB" ||
+    data === "\u001b[1;1B" ||
+    data === "\u001b[b"
+  ) {
+    return "down";
+  }
+  if (matchesKey(data, Key.right) || data === "\u001b[C" || data === "\u001bOC") {
+    return "right";
+  }
+  if (matchesKey(data, Key.left) || data === "\u001b[D" || data === "\u001bOD") {
+    return "left";
+  }
+  if (matchesKey(data, Key.home) || data === "\u001b[H" || data === "\u001bOH" || data === "\u001b[1~") {
+    return "home";
+  }
+  if (matchesKey(data, Key.end) || data === "\u001b[F" || data === "\u001bOF" || data === "\u001b[4~") {
+    return "end";
+  }
+  if (matchesKey(data, Key.pageUp) || data === "\u001b[5~") {
+    return "pageup";
+  }
+  if (matchesKey(data, Key.pageDown) || data === "\u001b[6~") {
+    return "pagedown";
+  }
+  if (matchesKey(data, Key.backspace) || data === "\u007f" || data === "\b") {
+    return "backspace";
+  }
   return data;
 }

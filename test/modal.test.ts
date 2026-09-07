@@ -71,8 +71,8 @@ describe("modal overlay component", () => {
       done,
     });
 
-    // Press down to select deep-reasoning
-    modal.handleInput("\u001b[B"); // down
+    // Press down in Application Cursor / SS3 mode (\u001bOB) to select deep-reasoning
+    modal.handleInput("\u001bOB"); // down in SS3 mode
     // Press enter to activate
     modal.handleInput("\r"); // enter
 
