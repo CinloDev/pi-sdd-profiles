@@ -46,8 +46,8 @@ export function constrainLines(lines: string[], width: number): string[] {
   return lines.map((line) => truncateToVisibleWidth(line, safeWidth));
 }
 
-// Dark violet #361e60 (from Cinlodev CUTE theme: userMessageBg)
-const VIOLET_BG_CODE = "\x1b[48;2;54;30;96m";
+// Deep dark violet #140a28 (from Cinlodev CUTE theme: toolSuccessBg)
+const VIOLET_BG_CODE = "\x1b[48;2;20;10;40m";
 const VIOLET_BG_RESET = "\x1b[49m";
 
 export function applyDarkVioletBg(text: string): string {
