@@ -80,6 +80,48 @@ describe("modal overlay component", () => {
     expect(done).toHaveBeenCalledWith({ action: "activated", profileName: "deep-reasoning" });
   });
 
+  it("should open create view on 'n', accept typed input and enter editor", () => {
+    const done = vi.fn();
+    mockManager.createProfile.mockReturnValueOnce({
+      success: true,
+      profile: {
+        name: "nuevo-perfil",
+        default_model: "anthropic/claude-sonnet-4-5",
+        default_effort: "high",
+        model_profiles: {},
+      },
+    });
+
+    const modal = createSddProfilesModal({
+      manager: mockManager,
+      availableModels,
+      done,
+    });
+
+    // Press 'n' to create
+    modal.handleInput("n");
+    let lines = modal.render(80);
+    expect(lines.join("\n")).toContain("Nuevo Perfil SDD");
+
+    // Type "test"
+    modal.handleInput("t");
+    modal.handleInput("e");
+    modal.handleInput("s");
+    modal.handleInput("t");
+
+    // Press Enter to confirm creation
+    modal.handleInput("\r");
+
+    expect(mockManager.createProfile).toHaveBeenCalledWith(
+      expect.objectContaining({ name: "test" })
+    );
+
+    // After creation, it immediately opens the editor
+    lines = modal.render(80);
+    expect(lines.join("\n")).toContain("Editar Perfil");
+    expect(lines.join("\n")).toContain("Orquestador");
+  });
+
   it("should open profile editor on 'e' and allow model picker navigation", () => {
     const done = vi.fn();
     const modal = createSddProfilesModal({

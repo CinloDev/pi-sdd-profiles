@@ -10,6 +10,7 @@ import {
 
 export type ModalView =
   | "profiles-list"
+  | "create-profile"
   | "profile-editor"
   | "model-picker"
   | "effort-picker"
@@ -23,6 +24,8 @@ export interface ModalInput {
   onProfileActivated?: (profile: Profile) => Promise<void> | void;
   done: (result?: { action: "activated" | "saved" | "closed"; profileName?: string }) => void;
 }
+
+export const ORCHESTRATOR_AGENT_KEY = "👑 Orquestador (Sesión Principal)";
 
 export const EFFORT_OPTIONS: Array<ReasoningEffort | "heredar"> = [
   "heredar",
@@ -47,9 +50,12 @@ export function createSddProfilesModal(input: ModalInput) {
   let selectedProfileIndex = 0;
   let profileScrollOffset = 0;
 
+  // State for new profile creation view
+  let newProfileInput = "";
+
   // Editing state for profile-editor
   let editingProfile: Profile | null = null;
-  let editingAgentsList: string[] = [...ALL_KNOWN_AGENTS];
+  let editingAgentsList: string[] = [ORCHESTRATOR_AGENT_KEY, ...ALL_KNOWN_AGENTS];
   let selectedAgentIndex = 0;
   let agentScrollOffset = 0;
   let isDirty = false;
@@ -103,9 +109,12 @@ export function createSddProfilesModal(input: ModalInput) {
     const cSuccess = (t: string) => (theme?.fg ? theme.fg("success", t) : t);
     const cDim = (t: string) => (theme?.fg ? theme.fg("dim", t) : t);
 
+    const activeProfileObj = activeProfileName ? manager.getProfile(activeProfileName) : null;
+    const activeOrchestrator = activeProfileObj?.default_model ? ` · Orquestador: ${activeProfileObj.default_model}` : "";
+
     const header = [
-      `Estado: Perfil activo → ${activeProfileName ? cSuccess(`● ${activeProfileName}`) : cDim("(ninguno)")}`,
-      cMuted("Atajos: [Enter] Activar · [e] Editar · [n] Nuevo · [d] Borrar · [Esc] Salir"),
+      `Estado: Perfil activo → ${activeProfileName ? cSuccess(`● ${activeProfileName}`) : cDim("(ninguno)")}${cDim(activeOrchestrator)}`,
+      cMuted("Atajos: [Enter] Activar · [e] Editar · [n] Nuevo Perfil · [d] Borrar · [Esc] Salir"),
       cDim("─".repeat(Math.max(10, width - 6))),
     ];
 
@@ -122,8 +131,8 @@ export function createSddProfilesModal(input: ModalInput) {
           : cDim("○ ");
 
         const scopeTag = cDim(`[${p.scope}]`);
-        const modelStr = p.default_model ? cMuted(` (${p.default_model})`) : "";
-        const agentCount = cDim(` · ${p.agent_count} agentes`);
+        const modelStr = p.default_model ? cMuted(` (Orquestador: ${p.default_model})`) : "";
+        const agentCount = cDim(` · ${p.agent_count} subagentes`);
 
         const line = `${cursor}${activeMarker}${isSelected ? cAccent(p.name) : p.name} ${scopeTag}${modelStr}${agentCount}`;
         listLines.push(line);
@@ -137,6 +146,28 @@ export function createSddProfilesModal(input: ModalInput) {
     ];
 
     return frameModal("🎛️ SDD Profile Manager", [...header, ...listLines, ...footer], width, theme);
+  };
+
+  // View: Create Profile
+  const renderCreateProfile = (width: number): string[] => {
+    const cAccent = (t: string) => (theme?.fg ? theme.fg("accent", t) : t);
+    const cMuted = (t: string) => (theme?.fg ? theme.fg("muted", t) : t);
+    const cDim = (t: string) => (theme?.fg ? theme.fg("dim", t) : t);
+
+    const header = [
+      "Crear un nuevo perfil de modelos SDD y Orquestador:",
+      cMuted("Escribí el nombre del nuevo perfil y presioná [Enter] para continuar al editor."),
+      cDim("─".repeat(Math.max(10, width - 6))),
+    ];
+
+    const inputLine = `  Nombre: ${cAccent(newProfileInput || "...")}${cAccent("█")}`;
+
+    const footer = [
+      cDim("─".repeat(Math.max(10, width - 6))),
+      cMuted("Atajos: [Enter] Crear y Configurar · [Esc] Cancelar"),
+    ];
+
+    return frameModal("➕ Nuevo Perfil SDD", [...header, "", inputLine, "", ...footer], width, theme);
   };
 
   // View: Profile Editor
@@ -159,8 +190,8 @@ export function createSddProfilesModal(input: ModalInput) {
     const dirtyIndicator = isDirty ? cWarning(" (cambios sin guardar*)") : "";
 
     const header = [
-      `Perfil: ${cAccent(editingProfile.name)}${dirtyIndicator} · Base: ${cMuted(editingProfile.default_model ?? "default")} (${editingProfile.default_effort ?? "medium"})`,
-      cMuted("Atajos: [Enter/m] Modelo agente · [e] Esfuerzo · [a] A TODOS · [c] Categoría · [s] Guardar · [Esc] Volver"),
+      `Perfil: ${cAccent(editingProfile.name)}${dirtyIndicator} · Orquestador: ${cMuted(editingProfile.default_model ?? "default")} (${editingProfile.default_effort ?? "medium"})`,
+      cMuted("Atajos: [Enter/m] Cambiar modelo · [e] Esfuerzo · [a] A TODOS · [c] Categoría · [s] Guardar · [Esc] Volver"),
       cDim("─".repeat(Math.max(10, width - 6))),
     ];
 
@@ -170,16 +201,21 @@ export function createSddProfilesModal(input: ModalInput) {
       const isSelected = idx === selectedAgentIndex;
       const cursor = isSelected ? cAccent("› ") : "  ";
 
-      const assignment = editingProfile.model_profiles[agentName];
-      let modelLabel = assignment?.model ? assignment.model : cDim(`(hereda: ${editingProfile.default_model ?? "default"})`);
-      let effortLabel = assignment?.effort ? cAccent(`[${assignment.effort}]`) : cDim(`[${editingProfile.default_effort ?? "default"}]`);
-
-      listLines.push(`${cursor}${isSelected ? cAccent(agentName) : agentName} → ${modelLabel} ${effortLabel}`);
+      if (agentName === ORCHESTRATOR_AGENT_KEY) {
+        const modelLabel = editingProfile.default_model ? editingProfile.default_model : cDim("(no definido)");
+        const effortLabel = editingProfile.default_effort ? cAccent(`[${editingProfile.default_effort}]`) : cDim("[default]");
+        listLines.push(`${cursor}${isSelected ? cAccent(agentName) : agentName} → ${cSuccess(modelLabel)} ${effortLabel}`);
+      } else {
+        const assignment = editingProfile.model_profiles[agentName];
+        const modelLabel = assignment?.model ? assignment.model : cDim(`(hereda: ${editingProfile.default_model ?? "default"})`);
+        const effortLabel = assignment?.effort ? cAccent(`[${assignment.effort}]`) : cDim(`[${editingProfile.default_effort ?? "default"}]`);
+        listLines.push(`${cursor}${isSelected ? cAccent(agentName) : agentName} → ${modelLabel} ${effortLabel}`);
+      }
     }
 
     const footer = [
       cDim("─".repeat(Math.max(10, width - 6))),
-      `Agente seleccionado: ${cAccent(selectedAgent())}`,
+      `Seleccionado: ${cAccent(selectedAgent())}`,
     ];
 
     return frameModal(`✏️ Editar Perfil: ${editingProfile.name}`, [...header, ...listLines, ...footer], width, theme);
@@ -200,11 +236,11 @@ export function createSddProfilesModal(input: ModalInput) {
 
     const titleTarget =
       pickerTarget === "all-models"
-        ? "TODOS los agentes"
+        ? "TODOS los agentes y Orquestador"
         : pickerTarget === "category-models"
           ? `Categoría: ${targetCategory}`
           : pickerTarget === "default-model"
-            ? "Modelo Base por defecto"
+            ? "👑 Orquestador (Modelo Base)"
             : `Agente: ${selectedAgent()}`;
 
     const header = [
@@ -258,11 +294,16 @@ export function createSddProfilesModal(input: ModalInput) {
       cDim("─".repeat(Math.max(10, width - 6))),
     ];
 
+    const categoryRows = [
+      "👑 Orquestador (Sesión Principal)",
+      ...SDD_AGENT_CATEGORIES.map((cat) => `${cat.name} (${cat.agents.length} agentes)`),
+    ];
+
     const listLines: string[] = [];
-    for (const [idx, cat] of SDD_AGENT_CATEGORIES.entries()) {
+    for (const [idx, item] of categoryRows.entries()) {
       const isSelected = idx === pickerIndex;
       const cursor = isSelected ? cAccent("› ") : "  ";
-      listLines.push(`${cursor}${isSelected ? cAccent(cat.name) : cat.name} (${cat.agents.length} agentes)`);
+      listLines.push(`${cursor}${isSelected ? cAccent(item) : item}`);
     }
 
     return frameModal("📦 Elegir Categoría", [...header, ...listLines], width, theme);
@@ -270,6 +311,7 @@ export function createSddProfilesModal(input: ModalInput) {
 
   return {
     render(width: number): string[] {
+      if (view === "create-profile") return constrainLines(renderCreateProfile(width), width);
       if (view === "profile-editor") return constrainLines(renderProfileEditor(width), width);
       if (view === "model-picker") return constrainLines(renderModelPicker(width), width);
       if (view === "effort-picker") return constrainLines(renderEffortPicker(width), width);
@@ -279,6 +321,45 @@ export function createSddProfilesModal(input: ModalInput) {
 
     handleInput(data: string): void {
       const key = normalizeModalKey(data);
+
+      // --- Sub-View: Create Profile ---
+      if (view === "create-profile") {
+        if (key === "esc") {
+          view = "profiles-list";
+          newProfileInput = "";
+        } else if (key === "backspace") {
+          newProfileInput = newProfileInput.slice(0, -1);
+        } else if (key === "enter") {
+          const trimmed = newProfileInput.trim();
+          if (trimmed) {
+            const fallbackModel = availableModels[0] ?? "anthropic/claude-sonnet-4-5";
+            const created = manager.createProfile({
+              name: trimmed,
+              description: `Perfil creado el ${new Date().toLocaleDateString()}`,
+              default_model: fallbackModel,
+              default_effort: "high",
+              model_profiles: {},
+              scope: "global",
+            });
+            if (created.success && created.profile) {
+              refreshProfiles();
+              editingProfile = {
+                ...created.profile,
+                model_profiles: { ...created.profile.model_profiles },
+              };
+              selectedAgentIndex = 0;
+              agentScrollOffset = 0;
+              isDirty = false;
+              view = "profile-editor";
+              newProfileInput = "";
+            }
+          }
+        } else if (data.length === 1 && /^[\w\-\. ]$/.test(data)) {
+          newProfileInput += data;
+        }
+        requestRender();
+        return;
+      }
 
       // --- Sub-View: Model Picker ---
       if (view === "model-picker") {
@@ -295,6 +376,7 @@ export function createSddProfilesModal(input: ModalInput) {
             if (pickerTarget === "default-model") {
               editingProfile.default_model = chosenModel;
             } else if (pickerTarget === "all-models") {
+              editingProfile.default_model = chosenModel;
               for (const ag of ALL_KNOWN_AGENTS) {
                 editingProfile.model_profiles[ag] = {
                   model: chosenModel,
@@ -313,10 +395,14 @@ export function createSddProfilesModal(input: ModalInput) {
               }
             } else {
               const currentAgent = selectedAgent();
-              editingProfile.model_profiles[currentAgent] = {
-                model: chosenModel,
-                effort: editingProfile.model_profiles[currentAgent]?.effort,
-              };
+              if (currentAgent === ORCHESTRATOR_AGENT_KEY) {
+                editingProfile.default_model = chosenModel;
+              } else {
+                editingProfile.model_profiles[currentAgent] = {
+                  model: chosenModel,
+                  effort: editingProfile.model_profiles[currentAgent]?.effort,
+                };
+              }
             }
           }
           view = "profile-editor";
@@ -339,7 +425,9 @@ export function createSddProfilesModal(input: ModalInput) {
             isDirty = true;
             const currentAgent = selectedAgent();
             const effortVal = chosen === "heredar" ? undefined : chosen;
-            if (editingProfile.model_profiles[currentAgent]) {
+            if (currentAgent === ORCHESTRATOR_AGENT_KEY) {
+              editingProfile.default_effort = effortVal;
+            } else if (editingProfile.model_profiles[currentAgent]) {
               editingProfile.model_profiles[currentAgent].effort = effortVal;
             } else if (effortVal) {
               editingProfile.model_profiles[currentAgent] = {
@@ -361,16 +449,25 @@ export function createSddProfilesModal(input: ModalInput) {
         } else if (key === "up" || key === "k") {
           pickerIndex = Math.max(0, pickerIndex - 1);
         } else if (key === "down" || key === "j") {
-          pickerIndex = Math.min(SDD_AGENT_CATEGORIES.length - 1, pickerIndex + 1);
+          pickerIndex = Math.min(SDD_AGENT_CATEGORIES.length, pickerIndex + 1);
         } else if (key === "enter") {
-          const cat = SDD_AGENT_CATEGORIES[pickerIndex];
-          if (cat) {
-            targetCategory = cat.name;
-            pickerTarget = "category-models";
+          if (pickerIndex === 0) {
+            // Orquestador
+            pickerTarget = "default-model";
             pickerItems = [...availableModels];
             pickerIndex = 0;
             pickerScrollOffset = 0;
             view = "model-picker";
+          } else {
+            const cat = SDD_AGENT_CATEGORIES[pickerIndex - 1];
+            if (cat) {
+              targetCategory = cat.name;
+              pickerTarget = "category-models";
+              pickerItems = [...availableModels];
+              pickerIndex = 0;
+              pickerScrollOffset = 0;
+              view = "model-picker";
+            }
           }
         }
         requestRender();
@@ -387,8 +484,12 @@ export function createSddProfilesModal(input: ModalInput) {
         } else if (key === "down" || key === "j") {
           selectedAgentIndex = Math.min(editingAgentsList.length - 1, selectedAgentIndex + 1);
         } else if (key === "enter" || key === "m") {
-          // Open model picker for selected agent
-          pickerTarget = "agent-model";
+          // Open model picker for selected agent or orchestrator
+          if (selectedAgent() === ORCHESTRATOR_AGENT_KEY) {
+            pickerTarget = "default-model";
+          } else {
+            pickerTarget = "agent-model";
+          }
           pickerItems = [...availableModels];
           pickerIndex = 0;
           pickerScrollOffset = 0;
@@ -398,7 +499,7 @@ export function createSddProfilesModal(input: ModalInput) {
           pickerIndex = 0;
           view = "effort-picker";
         } else if (key === "a") {
-          // Assign to ALL
+          // Assign to ALL (including orchestrator)
           pickerTarget = "all-models";
           pickerItems = [...availableModels];
           pickerIndex = 0;
@@ -443,6 +544,10 @@ export function createSddProfilesModal(input: ModalInput) {
             return;
           }
         }
+      } else if (key === "n") {
+        // Create new profile
+        newProfileInput = "";
+        view = "create-profile";
       } else if (key === "e") {
         // Edit selected profile
         const target = selectedProfile();
