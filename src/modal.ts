@@ -704,8 +704,6 @@ export function createSddProfilesModal(input: ModalInput) {
       requestRender();
     },
 
-    invalidate(): void {
-      requestRender();
-    },
+    invalidate(): void {},
   };
 }
