@@ -61,7 +61,7 @@ describe("modal overlay component", () => {
     expect(content).toContain("deep-reasoning");
   });
 
-  it("should navigate with arrow keys and activate on Enter", () => {
+  it("should navigate with arrow keys and activate on Enter without immediately closing", () => {
     const done = vi.fn();
     const onProfileActivated = vi.fn();
     const modal = createSddProfilesModal({
@@ -77,7 +77,62 @@ describe("modal overlay component", () => {
     modal.handleInput("\r"); // enter
 
     expect(mockManager.activateProfile).toHaveBeenCalledWith("deep-reasoning", "global");
-    expect(done).toHaveBeenCalledWith({ action: "activated", profileName: "deep-reasoning" });
+    expect(onProfileActivated).toHaveBeenCalledWith(mockProfileDetails);
+    // Modal stays open with feedback message!
+    expect(done).not.toHaveBeenCalled();
+    const lines = modal.render(80);
+    expect(lines.join("\n")).toContain("activado con éxito");
+
+    // User can close with Esc when ready
+    modal.handleInput("\u001b");
+    expect(done).toHaveBeenCalledWith({ action: "closed" });
+  });
+
+  it("should filter models in model picker as user types and select matching model", () => {
+    const done = vi.fn();
+    const modal = createSddProfilesModal({
+      manager: mockManager,
+      availableModels: [
+        "anthropic/claude-sonnet-4-5",
+        "openai/gpt-4o",
+        "google/gemini-2.5-flash",
+        "cpamc/cin82/gemini-3.8-flash-high",
+      ],
+      done,
+    });
+
+    // Open editor on first profile
+    modal.handleInput("e");
+    // Open model picker for orchestrator
+    modal.handleInput("m");
+
+    let lines = modal.render(80);
+    expect(lines.join("\n")).toContain("Filtrar:");
+    expect(lines.join("\n")).toContain("claude-sonnet-4-5");
+
+    // Type "flash" to filter
+    modal.handleInput("f");
+    modal.handleInput("l");
+    modal.handleInput("a");
+    modal.handleInput("s");
+    modal.handleInput("h");
+
+    lines = modal.render(80);
+    const content = lines.join("\n");
+    expect(content).toContain("gemini-2.5-flash");
+    expect(content).toContain("gemini-3.8-flash-high");
+    expect(content).not.toContain("claude-sonnet-4-5");
+    expect(content).not.toContain("gpt-4o");
+
+    // Backspace to delete 'h'
+    modal.handleInput("\u007f");
+    lines = modal.render(80);
+    expect(lines.join("\n")).toContain("flas");
+
+    // Press Enter to select first filtered model
+    modal.handleInput("\r");
+    lines = modal.render(80);
+    expect(lines.join("\n")).toContain("Nivel de Razonamiento");
   });
 
   it("should open create view on 'n', accept typed input and enter editor", () => {
