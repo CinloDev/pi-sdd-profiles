@@ -21,15 +21,78 @@ export default function sddProfilesExtension(pi: any): void {
     });
   };
 
+  const syncActiveProfileToRuntime = async (profile?: any, ctx?: any): Promise<void> => {
+    if (!profile) return;
+
+    // 1. Update footer status indicator
+    if (ctx?.hasUI && typeof ctx?.ui?.setStatus === "function") {
+      ctx.ui.setStatus("sdd-profile", `🎛️ [${profile.name}]`);
+    }
+
+    // 2. Switch main session model if default_model is defined
+    if (profile.default_model && typeof pi.setModel === "function") {
+      const sep = profile.default_model.indexOf("/");
+      if (sep !== -1) {
+        const provider = profile.default_model.slice(0, sep).trim();
+        const modelId = profile.default_model.slice(sep + 1).trim();
+
+        let targetModel = ctx?.modelRegistry?.find?.(provider, modelId);
+        if (!targetModel && typeof ctx?.modelRegistry?.getAvailable === "function") {
+          try {
+            const available = await ctx.modelRegistry.getAvailable();
+            targetModel = available?.find?.(
+              (m: any) =>
+                (m.provider === provider || m.providerId === provider) &&
+                (m.id === modelId || m.model === modelId || m.name === modelId)
+            );
+          } catch {}
+        }
+
+        if (targetModel) {
+          try {
+            await pi.setModel(targetModel);
+          } catch (e) {
+            console.warn(`[sdd-profiles] Could not switch session model to ${profile.default_model}:`, e);
+          }
+        }
+      }
+    }
+
+    // 3. Switch thinking level
+    if (profile.default_effort && typeof pi.setThinkingLevel === "function") {
+      try {
+        pi.setThinkingLevel(profile.default_effort);
+      } catch {}
+    }
+  };
+
+  // Ensure footer status and session model match active profile on start
+  pi.on?.("session_start", async (_event: any, ctx: any) => {
+    const manager = getManager(ctx);
+    const active = manager.getActiveProfileName();
+    if (active) {
+      const profile = manager.getProfile(active);
+      if (profile) {
+        await syncActiveProfileToRuntime(profile, ctx);
+      }
+    }
+  });
+
   // Main /sdd-profile command
   pi.registerCommand?.("sdd-profile", {
     description: "Gestionar y alternar perfiles de modelos SDD y subagentes (/sdd-profile [apply|save|list|show|delete])",
     handler: async (args: string, ctx: UiContext) => {
       const manager = getManager(ctx);
+      const boundCtx: UiContext = {
+        ...ctx,
+        onProfileActivated: async (p) => {
+          await syncActiveProfileToRuntime(p, ctx);
+        },
+      };
       const trimmed = (args || "").trim();
 
       if (!trimmed) {
-        return runInteractiveProfileSelect(manager, ctx);
+        return runInteractiveProfileSelect(manager, boundCtx);
       }
 
       const parts = trimmed.split(/\s+/);
@@ -66,6 +129,9 @@ export default function sddProfilesExtension(pi: any): void {
           }
           const isProject = parts.includes("--project");
           const result = manager.activateProfile(targetName, isProject ? "project" : "global");
+          if (result.success && result.profile) {
+            await syncActiveProfileToRuntime(result.profile, ctx);
+          }
           ctx.ui?.notify?.(result.message, result.success ? "info" : "error");
           return result.message;
         }
@@ -148,6 +214,9 @@ export default function sddProfilesExtension(pi: any): void {
         default: {
           // If the user typed `/sdd-profile <name>`, try activating it directly
           const result = manager.activateProfile(sub);
+          if (result.success && result.profile) {
+            await syncActiveProfileToRuntime(result.profile, ctx);
+          }
           ctx.ui?.notify?.(result.message, result.success ? "info" : "error");
           return result.message;
         }

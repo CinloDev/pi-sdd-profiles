@@ -9,8 +9,10 @@ export interface UiContext {
     input?: (prompt: string, placeholder?: string) => Promise<string | undefined>;
     notify?: (message: string, type: "info" | "warning" | "error") => void;
     confirm?: (title: string, message: string) => Promise<boolean>;
+    setStatus?: (id: string, text?: string) => void;
   };
   cwd?: string;
+  onProfileActivated?: (profile: Profile) => Promise<void> | void;
   [key: string]: unknown;
 }
 
@@ -361,6 +363,9 @@ export async function runInteractiveProfileCreate(
       const activate = await ctx.ui.confirm("Activar perfil", `¿Deseas activar el perfil "${name}" ahora?`);
       if (activate) {
         const actRes = manager.activateProfile(name, "global");
+        if (actRes.success && actRes.profile && ctx.onProfileActivated) {
+          await ctx.onProfileActivated(actRes.profile);
+        }
         ctx.ui.notify?.(actRes.message, actRes.success ? "info" : "error");
       }
     }
@@ -388,6 +393,9 @@ export async function runInteractiveProfileCreate(
     const activate = await ctx.ui.confirm("Activar perfil", `¿Deseas activar el perfil "${name}" ahora?`);
     if (activate) {
       const actRes = manager.activateProfile(name, "global");
+      if (actRes.success && actRes.profile && ctx.onProfileActivated) {
+        await ctx.onProfileActivated(actRes.profile);
+      }
       ctx.ui.notify?.(actRes.message, actRes.success ? "info" : "error");
     }
   }
@@ -445,6 +453,9 @@ export async function runInteractiveProfileSelect(
   const result = manager.activateProfile(profileName);
 
   if (result.success) {
+    if (result.profile && ctx.onProfileActivated) {
+      await ctx.onProfileActivated(result.profile);
+    }
     ctx.ui.notify?.(`Perfil SDD activado: ${profileName}`, "info");
   } else {
     ctx.ui.notify?.(result.message, "error");
