@@ -46,6 +46,17 @@ export function constrainLines(lines: string[], width: number): string[] {
   return lines.map((line) => truncateToVisibleWidth(line, safeWidth));
 }
 
+// Dark violet #361e60 (from Cinlodev CUTE theme: userMessageBg)
+const VIOLET_BG_CODE = "\x1b[48;2;54;30;96m";
+const VIOLET_BG_RESET = "\x1b[49m";
+
+export function applyDarkVioletBg(text: string): string {
+  const preserved = text
+    .replace(/\x1b\[0m/g, `\x1b[0m${VIOLET_BG_CODE}`)
+    .replace(/\x1b\[49m/g, VIOLET_BG_CODE);
+  return `${VIOLET_BG_CODE}${preserved}${VIOLET_BG_RESET}`;
+}
+
 export function frameModal(title: string, body: string[], width: number, theme?: any): string[] {
   const safeWidth = Math.max(1, Math.floor(width || 1));
   if (safeWidth < 30) return constrainLines([title, ...body], safeWidth);
@@ -54,14 +65,18 @@ export function frameModal(title: string, body: string[], width: number, theme?:
   const contentWidth = Math.max(1, innerWidth - 2);
 
   const titleFormatted = theme?.fg ? theme.fg("accent", ` ${title} `) : ` ${title} `;
-  const borderChar = (char: string) => (theme?.fg ? theme.fg("border", char) : char);
+  const borderChar = (char: string) => (theme?.fg ? theme.fg("borderAccent", char) || theme.fg("border", char) : char);
 
   const visibleTitleLen = visibleWidth(titleFormatted);
   const rightDashesCount = Math.max(0, innerWidth - visibleTitleLen);
   const top = `${borderChar("╭")}${titleFormatted}${borderChar("─".repeat(rightDashesCount))}${borderChar("╮")}`;
   const bottom = `${borderChar("╰")}${borderChar("─".repeat(innerWidth))}${borderChar("╯")}`;
 
-  const rows = body.map((line) => `${borderChar("│")} ${padToVisibleWidth(line, contentWidth)} ${borderChar("│")}`);
+  const rows = body.map((line) => {
+    const padded = padToVisibleWidth(line, contentWidth);
+    const bgRow = applyDarkVioletBg(` ${padded} `);
+    return `${borderChar("│")}${bgRow}${borderChar("│")}`;
+  });
 
   return [top, ...rows, bottom];
 }
