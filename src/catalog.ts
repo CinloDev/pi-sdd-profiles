@@ -50,6 +50,7 @@ export const SDD_AGENT_CATEGORIES: AgentCategory[] = [
       "gentle-ai-worker",
       "gentle-ai-verify",
       "ui-specialist",
+      "task-tracker-manager",
     ],
   },
 ];

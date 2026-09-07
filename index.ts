@@ -289,8 +289,8 @@ export default function sddProfilesExtension(pi: any): void {
     },
   });
 
-  // Keyboard shortcut to open interactive selector (alt+s avoids conflict with Pi core alt+p model cycling)
-  pi.registerShortcut?.("alt+s", {
+  // Keyboard shortcut to open interactive selector (alt+m avoids conflict with Pi core alt+p model cycling and gentle-agents alt+s)
+  pi.registerShortcut?.("alt+m", {
     description: "Abrir ventana flotante de perfiles SDD",
     handler: async (ctx: UiContext) => {
       const manager = getManager(ctx);

@@ -27,7 +27,7 @@ describe("extension entrypoint", () => {
     expect(mockPi.registerCommand).toHaveBeenCalledWith("sdd-profile-list", expect.any(Object));
 
     // Shortcut registered
-    expect(mockPi.registerShortcut).toHaveBeenCalledWith("alt+s", expect.any(Object));
+    expect(mockPi.registerShortcut).toHaveBeenCalledWith("alt+m", expect.any(Object));
 
     // Tools registered
     expect(mockPi.registerTool).toHaveBeenCalledWith(expect.objectContaining({ name: "sdd_profile_list" }));

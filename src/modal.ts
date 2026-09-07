@@ -77,6 +77,38 @@ export function createSddProfilesModal(input: ModalInput) {
   let targetCategory: string | undefined = undefined;
   let stagedModel: string | undefined = undefined;
 
+  // Feedback and model search filter state
+  let feedbackMessage: string | null = null;
+  let modelFilter = "";
+  let allPickerModels: string[] = [];
+
+  const applyModelFilter = () => {
+    const query = modelFilter.trim().toLowerCase();
+    if (!query) {
+      pickerItems = [...allPickerModels];
+    } else {
+      const tokens = query.split(/\s+/).filter(Boolean);
+      pickerItems = allPickerModels.filter((model) => {
+        const lower = model.toLowerCase();
+        return tokens.every((token) => lower.includes(token));
+      });
+    }
+    pickerIndex = 0;
+    pickerScrollOffset = 0;
+  };
+
+  const openModelPicker = (
+    target: "default-model" | "agent-model" | "all-models" | "category-models",
+    category?: string,
+  ) => {
+    pickerTarget = target;
+    targetCategory = category;
+    allPickerModels = [...availableModels];
+    modelFilter = "";
+    applyModelFilter();
+    view = "model-picker";
+  };
+
   const requestRender = () => tui?.requestRender?.();
 
   const refreshProfiles = () => {
@@ -124,7 +156,8 @@ export function createSddProfilesModal(input: ModalInput) {
 
     const header = [
       `Estado: Perfil activo → ${activeProfileName ? cSuccess(`● ${activeProfileName}`) : cDim("(ninguno)")}${cDim(activeOrchestrator)}`,
-      cMuted("Atajos: [Enter] Activar · [e] Editar · [n] Nuevo Perfil · [d] Borrar · [Esc] Salir"),
+      ...(feedbackMessage ? [cSuccess(`✔ ${feedbackMessage}`)] : []),
+      cMuted("Atajos: [Enter] Activar · [e] Editar · [n] Nuevo Perfil · [d] Borrar · [Esc/q] Salir"),
       cDim("═".repeat(Math.max(10, width - 6))),
     ];
 
@@ -249,6 +282,7 @@ export function createSddProfilesModal(input: ModalInput) {
     const cAccent = (t: string) => (theme?.fg ? theme.fg("accent", t) : t);
     const cMuted = (t: string) => (theme?.fg ? theme.fg("muted", t) : t);
     const cDim = (t: string) => (theme?.fg ? theme.fg("dim", t) : t);
+    const cWarning = (t: string) => (theme?.fg ? theme.fg("warning", t) : t);
 
     const titleTarget =
       pickerTarget === "all-models"
@@ -259,21 +293,31 @@ export function createSddProfilesModal(input: ModalInput) {
             ? "👑 Orquestador (Modelo Base)"
             : `Agente: ${selectedAgent()}`;
 
+    const filterBox = modelFilter
+      ? `Filtrar: ${cAccent(modelFilter)}${cAccent("█")} ${cDim(`(${pickerItems.length}/${allPickerModels.length} modelos)`)}`
+      : `Filtrar: ${cDim("(escribí cualquier texto para filtrar modelos...)")} ${cDim(`(${allPickerModels.length} disponibles)`)}`;
+
     const header = [
       `Asignar modelo a: ${cAccent(titleTarget)}`,
-      cMuted("Atajos: [↑/↓] Navegar · [Enter] Seleccionar · [Esc] Cancelar"),
+      filterBox,
+      cMuted("Atajos: [Escribir] Filtrar · [↑/↓] Navegar · [Enter] Seleccionar · [Backspace] Borrar · [Esc] Volver"),
       cDim("═".repeat(Math.max(10, width - 6))),
     ];
 
     const listLines: string[] = [];
-    for (const [offset, item] of visibleItems.entries()) {
-      const idx = pickerScrollOffset + offset;
-      const isSelected = idx === pickerIndex;
-      const cursor = isSelected ? cAccent("› ") : "  ";
-      listLines.push(`${cursor}${isSelected ? cAccent(item) : item}`);
+    if (pickerItems.length === 0) {
+      listLines.push(cWarning(`  No se encontraron modelos que coincidan con "${modelFilter}".`));
+      listLines.push(cDim("  Presioná [Backspace] para borrar el filtro o [Esc] para volver."));
+    } else {
+      for (const [offset, item] of visibleItems.entries()) {
+        const idx = pickerScrollOffset + offset;
+        const isSelected = idx === pickerIndex;
+        const cursor = isSelected ? cAccent("› ") : "  ";
+        listLines.push(`${cursor}${isSelected ? cAccent(item) : item}`);
+      }
     }
 
-    return frameModal("📋 Seleccionar Modelo", [...header, ...listLines], width, theme);
+    return frameModal("📋 Seleccionar Modelo (con Filtro)", [...header, ...listLines], width, theme);
   };
 
   // View: Effort Picker
@@ -403,12 +447,22 @@ export function createSddProfilesModal(input: ModalInput) {
 
       // --- Sub-View: Model Picker ---
       if (view === "model-picker") {
-        if (key === "esc" || key === "q") {
-          stagedModel = undefined;
-          view = "profile-editor";
-        } else if (key === "up" || key === "k") {
+        if (key === "esc") {
+          if (modelFilter) {
+            modelFilter = "";
+            applyModelFilter();
+          } else {
+            stagedModel = undefined;
+            view = "profile-editor";
+          }
+        } else if (key === "backspace") {
+          if (modelFilter.length > 0) {
+            modelFilter = modelFilter.slice(0, -1);
+            applyModelFilter();
+          }
+        } else if (key === "up") {
           pickerIndex = Math.max(0, pickerIndex - 1);
-        } else if (key === "down" || key === "j") {
+        } else if (key === "down") {
           pickerIndex = Math.min(pickerItems.length - 1, pickerIndex + 1);
         } else if (key === "pageup") {
           pickerIndex = Math.max(0, pickerIndex - 5);
@@ -425,9 +479,16 @@ export function createSddProfilesModal(input: ModalInput) {
             stagedModel = chosenModel;
             pickerIndex = 0;
             view = "effort-picker";
+          } else if (pickerItems.length === 0 && modelFilter.trim().includes("/")) {
+            stagedModel = modelFilter.trim();
+            pickerIndex = 0;
+            view = "effort-picker";
           } else {
             view = "profile-editor";
           }
+        } else if (data.length === 1 && /^[\w\-\.\/ :@+]$/.test(data)) {
+          modelFilter += data;
+          applyModelFilter();
         }
         requestRender();
         return;
@@ -531,20 +592,11 @@ export function createSddProfilesModal(input: ModalInput) {
         } else if (key === "enter") {
           if (pickerIndex === 0) {
             // Orquestador
-            pickerTarget = "default-model";
-            pickerItems = [...availableModels];
-            pickerIndex = 0;
-            pickerScrollOffset = 0;
-            view = "model-picker";
+            openModelPicker("default-model");
           } else {
             const cat = SDD_AGENT_CATEGORIES[pickerIndex - 1];
             if (cat) {
-              targetCategory = cat.name;
-              pickerTarget = "category-models";
-              pickerItems = [...availableModels];
-              pickerIndex = 0;
-              pickerScrollOffset = 0;
-              view = "model-picker";
+              openModelPicker("category-models", cat.name);
             }
           }
         }
@@ -573,11 +625,7 @@ export function createSddProfilesModal(input: ModalInput) {
           const current = selectedAgent();
           stagedModel = undefined;
           if (current === ASSIGN_ALL_SUBAGENTS_KEY) {
-            pickerTarget = "all-models";
-            pickerItems = [...availableModels];
-            pickerIndex = 0;
-            pickerScrollOffset = 0;
-            view = "model-picker";
+            openModelPicker("all-models");
           } else if (current === ASSIGN_ALL_EFFORT_KEY) {
             pickerTarget = "all-models";
             pickerIndex = 0;
@@ -586,18 +634,10 @@ export function createSddProfilesModal(input: ModalInput) {
             pickerIndex = 0;
             view = "category-picker";
           } else if (current === ORCHESTRATOR_AGENT_KEY) {
-            pickerTarget = "default-model";
-            pickerItems = [...availableModels];
-            pickerIndex = 0;
-            pickerScrollOffset = 0;
-            view = "model-picker";
+            openModelPicker("default-model");
           } else {
             // Individual subagent!
-            pickerTarget = "agent-model";
-            pickerItems = [...availableModels];
-            pickerIndex = 0;
-            pickerScrollOffset = 0;
-            view = "model-picker";
+            openModelPicker("agent-model");
           }
         } else if (key === "e") {
           const current = selectedAgent();
@@ -620,11 +660,7 @@ export function createSddProfilesModal(input: ModalInput) {
           }
         } else if (key === "a") {
           // Assign to ALL subagents
-          pickerTarget = "all-models";
-          pickerItems = [...availableModels];
-          pickerIndex = 0;
-          pickerScrollOffset = 0;
-          view = "model-picker";
+          openModelPicker("all-models");
         } else if (key === "c") {
           // Assign by Category
           pickerIndex = 0;
@@ -635,6 +671,7 @@ export function createSddProfilesModal(input: ModalInput) {
             manager.createProfile(editingProfile);
             isDirty = false;
             refreshProfiles();
+            feedbackMessage = `Perfil "${editingProfile.name}" guardado correctamente.`;
             view = "profiles-list";
           }
         }
@@ -661,23 +698,26 @@ export function createSddProfilesModal(input: ModalInput) {
       } else if (key === "end") {
         selectedProfileIndex = Math.max(0, profiles.length - 1);
       } else if (key === "enter") {
-        // Activate selected profile
+        // Activate selected profile WITHOUT immediately closing
         const target = selectedProfile();
         if (target) {
           const res = manager.activateProfile(target.name, "global");
           if (res.success && res.profile) {
             onProfileActivated?.(res.profile);
             refreshProfiles();
-            done({ action: "activated", profileName: target.name });
-            return;
+            feedbackMessage = `Perfil "${target.name}" activado con éxito. Podés seguir configurando o presionar [Esc] para cerrar.`;
+          } else {
+            feedbackMessage = `Error al activar perfil: ${res.message ?? "desconocido"}`;
           }
         }
       } else if (key === "n") {
         // Create new profile
+        feedbackMessage = null;
         newProfileInput = "";
         view = "create-profile";
       } else if (key === "e") {
         // Edit selected profile
+        feedbackMessage = null;
         const target = selectedProfile();
         if (target) {
           const loaded = manager.getProfile(target.name);
@@ -698,14 +738,13 @@ export function createSddProfilesModal(input: ModalInput) {
         if (target && target.scope !== "builtin") {
           manager.deleteProfile(target.name);
           refreshProfiles();
+          feedbackMessage = `Perfil "${target.name}" eliminado.`;
         }
       }
 
       requestRender();
     },
 
-    invalidate(): void {
-      requestRender();
-    },
+    invalidate(): void {},
   };
 }

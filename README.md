@@ -12,7 +12,7 @@ Se integra de forma transparente y atómica con [`pi-subagents-j0k3r`](https://g
 
 ## Características
 
-- 🪟 **Ventana Flotante Modal Interactiva**: Se abre centrada en la terminal (`alt+s` o `/sdd-profile`) sin borrar el historial ni salir del contexto.
+- 🪟 **Ventana Flotante Modal Interactiva**: Se abre centrada en la terminal (`alt+m` o `/sdd-profile`) sin borrar el historial ni salir del contexto.
 - ⚡ **Cambio en caliente**: Alterná perfiles y sincronizá el modelo de sesión y los subagentes al instante.
 - 📦 **Perfiles Estándar Incluidos**:
   - `balanced-default`: Equilibrio entre calidad y costo con Claude Sonnet 4.5 y Claude Haiku 4.5.
@@ -27,12 +27,13 @@ Se integra de forma transparente y atómica con [`pi-subagents-j0k3r`](https://g
 
 ---
 
-## Controles en la Ventana Flotante (`alt+s`)
+## Controles en la Ventana Flotante (`alt+m`)
 
 ### Vista Principal (Lista de Perfiles)
 - `↑` / `↓` o `j` / `k`: Moverse entre los perfiles disponibles.
-- `Enter`: Activar el perfil seleccionado (actualiza subagentes y modelo de sesión).
+- `Enter`: Activar el perfil seleccionado en caliente (permanece abierto con confirmación visual para que puedas seguir configurando o explorando).
 - `e`: Abrir el editor de modelos del perfil seleccionado.
+- `n`: Crear un nuevo perfil personalizado.
 - `d`: Borrar perfil personalizado. 
 - `Esc` o `q`: Cerrar la ventana flotante.
 
@@ -51,8 +52,13 @@ Se integra de forma transparente y atómica con [`pi-subagents-j0k3r`](https://g
 
 ---
 
-### Selector Desplegable de Modelos
+### Selector Desplegable de Modelos (con Filtro en Tiempo Real)
 Al asignar un modelo a cualquier agente o categoría, se abre la lista flotante con todos los modelos disponibles en tu entorno:
+- **Buscador/Filtro reactivo**: Escribí cualquier término (ej: `flash`, `sonnet`, `gemini`, `o3`) para filtrar al instante entre 50+ modelos.
+- `Backspace`: Borra caracteres del filtro de búsqueda.
+- `↑` / `↓`: Navegar únicamente entre los modelos coincidentes.
+- `Enter`: Confirmar y pasar a la selección de nivel de razonamiento (`effort`).
+- `Esc`: Limpiar filtro o volver al editor.
 
 <p align="center">
   <img src="public/3.png" alt="SDD Profile Manager — Selector de Modelos" width="850" />
@@ -74,7 +80,7 @@ Al asignar un modelo a cualquier agente o categoría, se abre la lista flotante 
 | `/sdd-profile delete <nombre>` | Elimina un perfil personalizado creado por el usuario. |
 
 ### Atajo de teclado
-- `alt+s`: Abre de inmediato el menú selector de perfiles.
+- `alt+m`: Abre de inmediato el menú selector de perfiles.
 
 ---
 
@@ -123,6 +129,14 @@ El proyecto cuenta con suite completa de tests unitarios:
 pnpm test
 pnpm typecheck
 ```
+
+---
+
+## Contribuir 🤝
+
+¡Las contribuciones son más que bienvenidas! Si querés reportar un bug, sugerir un nuevo perfil o sumar código, leé nuestra [Guía de Contribución](CONTRIBUTING.md) para conocer las pautas de arquitectura, atajos y tests.
+
+---
 
 ## Licencia
 MIT
