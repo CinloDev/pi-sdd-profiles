@@ -271,13 +271,17 @@ export default function sddProfilesExtension(pi: any): void {
         type: "object",
         properties: {},
       },
-      handler: async () => {
-        const manager = getManager();
+      execute: async (_toolCallId: string, _params: any, _signal: any, _onUpdate: any, ctx: any) => {
+        const manager = getManager(ctx);
         const profiles = manager.listProfiles();
         const active = manager.getActiveProfileName();
         return {
-          active_profile: active,
-          profiles,
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify({ active_profile: active, profiles }, null, 2),
+            },
+          ],
         };
       },
     });
@@ -300,13 +304,33 @@ export default function sddProfilesExtension(pi: any): void {
         },
         required: ["profile_name"],
       },
-      handler: async (args: { profile_name: string; scope?: "global" | "project" }) => {
-        const manager = getManager();
+      execute: async (
+        _toolCallId: string,
+        args: { profile_name: string; scope?: "global" | "project" },
+        _signal: any,
+        _onUpdate: any,
+        ctx: any
+      ) => {
+        const manager = getManager(ctx);
         const res = manager.activateProfile(args.profile_name, args.scope ?? "global");
+        if (res.success && res.profile) {
+          await syncActiveProfileToRuntime(res.profile, ctx);
+        }
         return {
-          success: res.success,
-          message: res.message,
-          active_profile: args.profile_name,
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(
+                {
+                  success: res.success,
+                  message: res.message,
+                  active_profile: args.profile_name,
+                },
+                null,
+                2
+              ),
+            },
+          ],
         };
       },
     });
