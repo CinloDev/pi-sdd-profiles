@@ -155,7 +155,7 @@ export function createSddProfilesModal(input: ModalInput) {
       currentP?.description ? `Descripción: ${cDim(currentP.description)}` : `Perfil: ${currentP?.name ?? "ninguno"}`,
     ];
 
-    return frameModal("🎛️ SDD Profile Manager", [...header, ...listLines, ...footer], width, theme);
+    return frameModal("🎛️ SDD Profile Manager · De y para la Comunidad", [...header, ...listLines, ...footer], width, theme);
   };
 
   // View: Create Profile
