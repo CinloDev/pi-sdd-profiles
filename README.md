@@ -4,6 +4,10 @@ Extensión nativa para **Pi Coding Agent** para crear, guardar, versionar y alte
 
 Se integra de forma transparente y atómica con [`pi-subagents-j0k3r`](https://github.com/j0k3r-dev-rgl/pi-subagents-j0k3r), actualizando las asignaciones de modelos en `subagents.json` sin alterar timeouts, atajos de teclado ni herramientas configuradas.
 
+<p align="center">
+  <img src="public/1.png" alt="SDD Profile Manager — Ventana Flotante Modal" width="850" />
+</p>
+
 ---
 
 ## Características
@@ -29,7 +33,7 @@ Se integra de forma transparente y atómica con [`pi-subagents-j0k3r`](https://g
 - `↑` / `↓` o `j` / `k`: Moverse entre los perfiles disponibles.
 - `Enter`: Activar el perfil seleccionado (actualiza subagentes y modelo de sesión).
 - `e`: Abrir el editor de modelos del perfil seleccionado.
-- `d`: Borrar perfil personalizado.
+- `d`: Borrar perfil personalizado. 
 - `Esc` o `q`: Cerrar la ventana flotante.
 
 ### Vista de Edición (`e` dentro de un perfil)
@@ -40,6 +44,19 @@ Se integra de forma transparente y atómica con [`pi-subagents-j0k3r`](https://g
 - `c`: Asignar un modelo a una **Categoría** entera (Núcleo SDD, Judgment Day, Revisores).
 - `s`: Guardar los cambios del perfil.
 - `Esc`: Volver a la lista de perfiles.
+
+<p align="center">
+  <img src="public/2.png" alt="SDD Profile Manager — Editor de Perfil" width="850" />
+</p>
+
+---
+
+### Selector Desplegable de Modelos
+Al asignar un modelo a cualquier agente o categoría, se abre la lista flotante con todos los modelos disponibles en tu entorno:
+
+<p align="center">
+  <img src="public/3.png" alt="SDD Profile Manager — Selector de Modelos" width="850" />
+</p>
 
 ---
 
@@ -63,7 +80,7 @@ Se integra de forma transparente y atómica con [`pi-subagents-j0k3r`](https://g
 
 ## Estructura de un Perfil (`*.json`)
 
-```json
+```json 
 {
   "name": "mi-perfil",
   "description": "Configuración personalizada para desarrollo rápido",
