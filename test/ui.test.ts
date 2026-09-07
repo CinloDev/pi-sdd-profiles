@@ -59,7 +59,7 @@ describe("ui formatting module", () => {
     expect(output).toContain("`custom-special`");
   });
 
-  it("should guide profile creation via interactive wizard", async () => {
+  it("should guide profile creation via interactive wizard with model select dropdown", async () => {
     const mockManager = {
       createProfile: vi.fn(() => ({ success: true, message: "OK" })),
       activateProfile: vi.fn(() => ({ success: true, message: "Activated" })),
@@ -70,9 +70,12 @@ describe("ui formatting module", () => {
         input: vi
           .fn()
           .mockResolvedValueOnce("wizard-profile") // name
-          .mockResolvedValueOnce("Wizard created") // desc
-          .mockResolvedValueOnce("test/model"), // model
-        select: vi.fn().mockResolvedValueOnce("high"), // effort
+          .mockResolvedValueOnce("Wizard created"), // desc
+        select: vi
+          .fn()
+          .mockResolvedValueOnce("anthropic/claude-sonnet-4-5") // model select from dropdown!
+          .mockResolvedValueOnce("high") // effort select
+          .mockResolvedValueOnce("🚀 Aplicar a todos"), // strategy
         confirm: vi.fn().mockResolvedValueOnce(true), // activate now
         notify: vi.fn(),
       },
@@ -80,13 +83,54 @@ describe("ui formatting module", () => {
 
     const res = await runInteractiveProfileCreate(mockManager as any, mockCtx as any);
     expect(res).toBe("OK");
-    expect(mockManager.createProfile).toHaveBeenCalledWith({
-      name: "wizard-profile",
-      description: "Wizard created",
-      default_model: "test/model",
-      default_effort: "high",
-      scope: "global",
-    });
+    expect(mockManager.createProfile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: "wizard-profile",
+        description: "Wizard created",
+        default_model: "anthropic/claude-sonnet-4-5",
+        default_effort: "high",
+        scope: "global",
+      })
+    );
     expect(mockManager.activateProfile).toHaveBeenCalledWith("wizard-profile", "global");
+  });
+
+  it("should allow editing profile models interactively", async () => {
+    const mockProfile: Profile = {
+      name: "edit-me",
+      default_model: "old/model",
+      default_effort: "low",
+      model_profiles: {},
+    };
+
+    const mockManager = {
+      getProfile: vi.fn(() => mockProfile),
+      createProfile: vi.fn(() => ({ success: true, message: "Saved" })),
+    };
+
+    const mockCtx = {
+      ui: {
+        select: vi
+          .fn()
+          .mockResolvedValueOnce("🎯 Cambiar modelo por defecto [old/model]")
+          .mockResolvedValueOnce("anthropic/claude-sonnet-4-5") // picked new model from list
+          .mockResolvedValueOnce("💾 Guardar y Salir"),
+        notify: vi.fn(),
+      },
+    };
+
+    const res = await (await import("../src/ui.js")).runInteractiveProfileEdit(
+      mockManager as any,
+      mockCtx as any,
+      "edit-me"
+    );
+
+    expect(res).toBe("Saved");
+    expect(mockManager.createProfile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: "edit-me",
+        default_model: "anthropic/claude-sonnet-4-5",
+      })
+    );
   });
 });

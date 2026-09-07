@@ -3,6 +3,7 @@ import {
   formatProfileDetail,
   formatProfileList,
   runInteractiveProfileCreate,
+  runInteractiveProfileEdit,
   runInteractiveProfileSelect,
   type UiContext,
 } from "./src/ui.js";
@@ -102,6 +103,14 @@ export default function sddProfilesExtension(pi: any): void {
           });
           ctx.ui?.notify?.(result.message, result.success ? "info" : "error");
           return result.message;
+        }
+
+        case "edit": {
+          if (!targetName) {
+            ctx.ui?.notify?.("Uso: /sdd-profile edit <nombre>", "warning");
+            return "Uso: /sdd-profile edit <nombre>";
+          }
+          return runInteractiveProfileEdit(manager, ctx, targetName);
         }
 
         case "set": {
