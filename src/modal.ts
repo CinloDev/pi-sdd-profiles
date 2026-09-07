@@ -26,6 +26,8 @@ export interface ModalInput {
 }
 
 export const ORCHESTRATOR_AGENT_KEY = "👑 Orquestador (Sesión Principal)";
+export const ASSIGN_ALL_SUBAGENTS_KEY = "⚡ [Asignar un mismo modelo a TODOS los subagentes...]";
+export const ASSIGN_CATEGORY_KEY = "📦 [Asignar modelo por Categoría...]";
 
 export const EFFORT_OPTIONS: Array<ReasoningEffort | "heredar"> = [
   "heredar",
@@ -55,7 +57,12 @@ export function createSddProfilesModal(input: ModalInput) {
 
   // Editing state for profile-editor
   let editingProfile: Profile | null = null;
-  let editingAgentsList: string[] = [ORCHESTRATOR_AGENT_KEY, ...ALL_KNOWN_AGENTS];
+  let editingAgentsList: string[] = [
+    ORCHESTRATOR_AGENT_KEY,
+    ASSIGN_ALL_SUBAGENTS_KEY,
+    ASSIGN_CATEGORY_KEY,
+    ...ALL_KNOWN_AGENTS,
+  ];
   let selectedAgentIndex = 0;
   let agentScrollOffset = 0;
   let isDirty = false;
@@ -205,6 +212,8 @@ export function createSddProfilesModal(input: ModalInput) {
         const modelLabel = editingProfile.default_model ? editingProfile.default_model : cDim("(no definido)");
         const effortLabel = editingProfile.default_effort ? cAccent(`[${editingProfile.default_effort}]`) : cDim("[default]");
         listLines.push(`${cursor}${isSelected ? cAccent(agentName) : agentName} → ${cSuccess(modelLabel)} ${effortLabel}`);
+      } else if (agentName === ASSIGN_ALL_SUBAGENTS_KEY || agentName === ASSIGN_CATEGORY_KEY) {
+        listLines.push(`${cursor}${isSelected ? cAccent(agentName) : cWarning(agentName)}`);
       } else {
         const assignment = editingProfile.model_profiles[agentName];
         const modelLabel = assignment?.model ? assignment.model : cDim(`(hereda: ${editingProfile.default_model ?? "default"})`);
@@ -236,7 +245,7 @@ export function createSddProfilesModal(input: ModalInput) {
 
     const titleTarget =
       pickerTarget === "all-models"
-        ? "TODOS los agentes y Orquestador"
+        ? "TODOS los subagentes"
         : pickerTarget === "category-models"
           ? `Categoría: ${targetCategory}`
           : pickerTarget === "default-model"
@@ -484,22 +493,38 @@ export function createSddProfilesModal(input: ModalInput) {
         } else if (key === "down" || key === "j") {
           selectedAgentIndex = Math.min(editingAgentsList.length - 1, selectedAgentIndex + 1);
         } else if (key === "enter" || key === "m") {
-          // Open model picker for selected agent or orchestrator
-          if (selectedAgent() === ORCHESTRATOR_AGENT_KEY) {
+          const current = selectedAgent();
+          if (current === ASSIGN_ALL_SUBAGENTS_KEY) {
+            pickerTarget = "all-models";
+            pickerItems = [...availableModels];
+            pickerIndex = 0;
+            pickerScrollOffset = 0;
+            view = "model-picker";
+          } else if (current === ASSIGN_CATEGORY_KEY) {
+            pickerIndex = 0;
+            view = "category-picker";
+          } else if (current === ORCHESTRATOR_AGENT_KEY) {
             pickerTarget = "default-model";
+            pickerItems = [...availableModels];
+            pickerIndex = 0;
+            pickerScrollOffset = 0;
+            view = "model-picker";
           } else {
+            // Individual subagent!
             pickerTarget = "agent-model";
+            pickerItems = [...availableModels];
+            pickerIndex = 0;
+            pickerScrollOffset = 0;
+            view = "model-picker";
           }
-          pickerItems = [...availableModels];
-          pickerIndex = 0;
-          pickerScrollOffset = 0;
-          view = "model-picker";
         } else if (key === "e") {
-          // Open effort picker
-          pickerIndex = 0;
-          view = "effort-picker";
+          const current = selectedAgent();
+          if (current !== ASSIGN_ALL_SUBAGENTS_KEY && current !== ASSIGN_CATEGORY_KEY) {
+            pickerIndex = 0;
+            view = "effort-picker";
+          }
         } else if (key === "a") {
-          // Assign to ALL (including orchestrator)
+          // Assign to ALL subagents
           pickerTarget = "all-models";
           pickerItems = [...availableModels];
           pickerIndex = 0;

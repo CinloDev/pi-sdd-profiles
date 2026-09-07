@@ -137,7 +137,7 @@ describe("modal overlay component", () => {
     expect(content).toContain("Editar Perfil: cin");
     expect(content).toContain("sdd-explore");
 
-    // Press 'm' to open model picker
+    // Press 'm' to open model picker (for orchestrator)
     modal.handleInput("m");
     lines = modal.render(80);
     content = lines.join("\n");
@@ -149,6 +149,30 @@ describe("modal overlay component", () => {
     lines = modal.render(80);
     content = lines.join("\n");
     expect(content).toContain("Editar Perfil: cin");
+
+    // Move down to index 1: "Asignar a TODOS los subagentes"
+    modal.handleInput("\u001b[B"); // down
+    modal.handleInput("\r"); // enter
+    lines = modal.render(80);
+    content = lines.join("\n");
+    expect(content).toContain("TODOS los subagentes");
+
+    // Select second model (anthropic/claude-sonnet-4-5)
+    modal.handleInput("\u001b[B"); // down
+    modal.handleInput("\r"); // enter
+
+    // Move down to index 3 (sdd-explore) to customize individually
+    modal.handleInput("\u001b[B"); // down to index 2 (Category)
+    modal.handleInput("\u001b[B"); // down to index 3 (sdd-explore)
+    modal.handleInput("\r"); // enter
+    lines = modal.render(80);
+    content = lines.join("\n");
+    expect(content).toContain("Agente: sdd-explore");
+
+    // Select third model (openai/o3-mini) for sdd-explore individually
+    modal.handleInput("\u001b[B");
+    modal.handleInput("\u001b[B");
+    modal.handleInput("\r");
 
     // Press 'esc' to exit editor back to main list
     modal.handleInput("\u001b");
