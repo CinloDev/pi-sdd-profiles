@@ -27,6 +27,7 @@ export interface ModalInput {
 
 export const ORCHESTRATOR_AGENT_KEY = "👑 Orquestador (Sesión Principal)";
 export const ASSIGN_ALL_SUBAGENTS_KEY = "⚡ [Asignar un mismo modelo a TODOS los subagentes...]";
+export const ASSIGN_ALL_EFFORT_KEY = "🧠 [Asignar un mismo nivel de esfuerzo a TODOS los subagentes...]";
 export const ASSIGN_CATEGORY_KEY = "📦 [Asignar modelo por Categoría...]";
 
 export const EFFORT_OPTIONS: Array<ReasoningEffort | "heredar"> = [
@@ -60,6 +61,7 @@ export function createSddProfilesModal(input: ModalInput) {
   let editingAgentsList: string[] = [
     ORCHESTRATOR_AGENT_KEY,
     ASSIGN_ALL_SUBAGENTS_KEY,
+    ASSIGN_ALL_EFFORT_KEY,
     ASSIGN_CATEGORY_KEY,
     ...ALL_KNOWN_AGENTS,
   ];
@@ -73,6 +75,7 @@ export function createSddProfilesModal(input: ModalInput) {
   let pickerScrollOffset = 0;
   let pickerTarget: "default-model" | "agent-model" | "all-models" | "category-models" = "agent-model";
   let targetCategory: string | undefined = undefined;
+  let stagedModel: string | undefined = undefined;
 
   const requestRender = () => tui?.requestRender?.();
 
@@ -212,7 +215,11 @@ export function createSddProfilesModal(input: ModalInput) {
         const modelLabel = editingProfile.default_model ? editingProfile.default_model : cDim("(no definido)");
         const effortLabel = editingProfile.default_effort ? cAccent(`[${editingProfile.default_effort}]`) : cDim("[default]");
         listLines.push(`${cursor}${isSelected ? cAccent(agentName) : agentName} → ${cSuccess(modelLabel)} ${effortLabel}`);
-      } else if (agentName === ASSIGN_ALL_SUBAGENTS_KEY || agentName === ASSIGN_CATEGORY_KEY) {
+      } else if (
+        agentName === ASSIGN_ALL_SUBAGENTS_KEY ||
+        agentName === ASSIGN_ALL_EFFORT_KEY ||
+        agentName === ASSIGN_CATEGORY_KEY
+      ) {
         listLines.push(`${cursor}${isSelected ? cAccent(agentName) : cWarning(agentName)}`);
       } else {
         const assignment = editingProfile.model_profiles[agentName];
@@ -273,11 +280,23 @@ export function createSddProfilesModal(input: ModalInput) {
   const renderEffortPicker = (width: number): string[] => {
     const cAccent = (t: string) => (theme?.fg ? theme.fg("accent", t) : t);
     const cMuted = (t: string) => (theme?.fg ? theme.fg("muted", t) : t);
+    const cSuccess = (t: string) => (theme?.fg ? theme.fg("success", t) : t);
     const cDim = (t: string) => (theme?.fg ? theme.fg("dim", t) : t);
 
+    const titleTarget =
+      pickerTarget === "all-models"
+        ? "TODOS los subagentes"
+        : pickerTarget === "category-models"
+          ? `Categoría: ${targetCategory}`
+          : pickerTarget === "default-model" || selectedAgent() === ORCHESTRATOR_AGENT_KEY
+            ? "👑 Orquestador (Sesión Principal)"
+            : `Agente: ${selectedAgent()}`;
+
+    const modelInfo = stagedModel ? ` · Modelo asignado: ${cSuccess(stagedModel)}` : "";
+
     const header = [
-      `Elegir nivel de razonamiento para: ${cAccent(selectedAgent())}`,
-      cMuted("Atajos: [↑/↓] Navegar · [Enter] Seleccionar · [Esc] Cancelar"),
+      `Elegir nivel de razonamiento para: ${cAccent(titleTarget)}${modelInfo}`,
+      cMuted("Atajos: [↑/↓] Navegar · [Enter] Confirmar · [Esc] Saltear esfuerzo"),
       cDim("─".repeat(Math.max(10, width - 6))),
     ];
 
@@ -285,10 +304,22 @@ export function createSddProfilesModal(input: ModalInput) {
     for (const [idx, item] of EFFORT_OPTIONS.entries()) {
       const isSelected = idx === pickerIndex;
       const cursor = isSelected ? cAccent("› ") : "  ";
-      listLines.push(`${cursor}${isSelected ? cAccent(item) : item}`);
+      const desc =
+        item === "high"
+          ? cDim(" (razonamiento alto)")
+          : item === "medium"
+            ? cDim(" (balance estándar)")
+            : item === "low"
+              ? cDim(" (rápido y económico)")
+              : item === "max"
+                ? cDim(" (máxima profundidad)")
+                : item === "heredar"
+                  ? cDim(" (heredar por defecto)")
+                  : "";
+      listLines.push(`${cursor}${isSelected ? cAccent(item) : item}${desc}`);
     }
 
-    return frameModal("🧠 Seleccionar Esfuerzo", [...header, ...listLines], width, theme);
+    return frameModal("🧠 Nivel de Razonamiento (Effort)", [...header, ...listLines], width, theme);
   };
 
   // View: Category Picker
@@ -373,6 +404,7 @@ export function createSddProfilesModal(input: ModalInput) {
       // --- Sub-View: Model Picker ---
       if (view === "model-picker") {
         if (key === "esc" || key === "q") {
+          stagedModel = undefined;
           view = "profile-editor";
         } else if (key === "up" || key === "k") {
           pickerIndex = Math.max(0, pickerIndex - 1);
@@ -381,40 +413,13 @@ export function createSddProfilesModal(input: ModalInput) {
         } else if (key === "enter") {
           const chosenModel = pickerItems[pickerIndex];
           if (chosenModel && editingProfile) {
-            isDirty = true;
-            if (pickerTarget === "default-model") {
-              editingProfile.default_model = chosenModel;
-            } else if (pickerTarget === "all-models") {
-              editingProfile.default_model = chosenModel;
-              for (const ag of ALL_KNOWN_AGENTS) {
-                editingProfile.model_profiles[ag] = {
-                  model: chosenModel,
-                  effort: editingProfile.model_profiles[ag]?.effort,
-                };
-              }
-            } else if (pickerTarget === "category-models" && targetCategory) {
-              const cat = SDD_AGENT_CATEGORIES.find((c) => c.name === targetCategory);
-              if (cat) {
-                for (const ag of cat.agents) {
-                  editingProfile.model_profiles[ag] = {
-                    model: chosenModel,
-                    effort: editingProfile.model_profiles[ag]?.effort,
-                  };
-                }
-              }
-            } else {
-              const currentAgent = selectedAgent();
-              if (currentAgent === ORCHESTRATOR_AGENT_KEY) {
-                editingProfile.default_model = chosenModel;
-              } else {
-                editingProfile.model_profiles[currentAgent] = {
-                  model: chosenModel,
-                  effort: editingProfile.model_profiles[currentAgent]?.effort,
-                };
-              }
-            }
+            // Stage model and seamlessly chain to effort-picker!
+            stagedModel = chosenModel;
+            pickerIndex = 0;
+            view = "effort-picker";
+          } else {
+            view = "profile-editor";
           }
-          view = "profile-editor";
         }
         requestRender();
         return;
@@ -423,6 +428,38 @@ export function createSddProfilesModal(input: ModalInput) {
       // --- Sub-View: Effort Picker ---
       if (view === "effort-picker") {
         if (key === "esc" || key === "q") {
+          // If a model was staged, apply it without altering effort
+          if (stagedModel && editingProfile) {
+            isDirty = true;
+            if (pickerTarget === "default-model" || selectedAgent() === ORCHESTRATOR_AGENT_KEY) {
+              editingProfile.default_model = stagedModel;
+            } else if (pickerTarget === "all-models") {
+              editingProfile.default_model = stagedModel;
+              for (const ag of ALL_KNOWN_AGENTS) {
+                editingProfile.model_profiles[ag] = {
+                  model: stagedModel,
+                  effort: editingProfile.model_profiles[ag]?.effort,
+                };
+              }
+            } else if (pickerTarget === "category-models" && targetCategory) {
+              const cat = SDD_AGENT_CATEGORIES.find((c) => c.name === targetCategory);
+              if (cat) {
+                for (const ag of cat.agents) {
+                  editingProfile.model_profiles[ag] = {
+                    model: stagedModel,
+                    effort: editingProfile.model_profiles[ag]?.effort,
+                  };
+                }
+              }
+            } else {
+              const currentAgent = selectedAgent();
+              editingProfile.model_profiles[currentAgent] = {
+                model: stagedModel,
+                effort: editingProfile.model_profiles[currentAgent]?.effort,
+              };
+            }
+          }
+          stagedModel = undefined;
           view = "profile-editor";
         } else if (key === "up" || key === "k") {
           pickerIndex = Math.max(0, pickerIndex - 1);
@@ -432,19 +469,43 @@ export function createSddProfilesModal(input: ModalInput) {
           const chosen = EFFORT_OPTIONS[pickerIndex];
           if (editingProfile) {
             isDirty = true;
-            const currentAgent = selectedAgent();
             const effortVal = chosen === "heredar" ? undefined : chosen;
-            if (currentAgent === ORCHESTRATOR_AGENT_KEY) {
+
+            if (pickerTarget === "default-model" || selectedAgent() === ORCHESTRATOR_AGENT_KEY) {
+              if (stagedModel) editingProfile.default_model = stagedModel;
               editingProfile.default_effort = effortVal;
-            } else if (editingProfile.model_profiles[currentAgent]) {
-              editingProfile.model_profiles[currentAgent].effort = effortVal;
-            } else if (effortVal) {
+            } else if (pickerTarget === "all-models") {
+              if (stagedModel) editingProfile.default_model = stagedModel;
+              for (const ag of ALL_KNOWN_AGENTS) {
+                editingProfile.model_profiles[ag] = {
+                  model: stagedModel ?? editingProfile.model_profiles[ag]?.model ?? editingProfile.default_model ?? "default",
+                  effort: effortVal,
+                };
+              }
+            } else if (pickerTarget === "category-models" && targetCategory) {
+              const cat = SDD_AGENT_CATEGORIES.find((c) => c.name === targetCategory);
+              if (cat) {
+                for (const ag of cat.agents) {
+                  editingProfile.model_profiles[ag] = {
+                    model: stagedModel ?? editingProfile.model_profiles[ag]?.model ?? editingProfile.default_model ?? "default",
+                    effort: effortVal,
+                  };
+                }
+              }
+            } else {
+              const currentAgent = selectedAgent();
+              const currentModel =
+                stagedModel ??
+                editingProfile.model_profiles[currentAgent]?.model ??
+                editingProfile.default_model ??
+                "default";
               editingProfile.model_profiles[currentAgent] = {
-                model: editingProfile.default_model ?? "default",
+                model: currentModel,
                 effort: effortVal,
               };
             }
           }
+          stagedModel = undefined;
           view = "profile-editor";
         }
         requestRender();
@@ -494,12 +555,17 @@ export function createSddProfilesModal(input: ModalInput) {
           selectedAgentIndex = Math.min(editingAgentsList.length - 1, selectedAgentIndex + 1);
         } else if (key === "enter" || key === "m") {
           const current = selectedAgent();
+          stagedModel = undefined;
           if (current === ASSIGN_ALL_SUBAGENTS_KEY) {
             pickerTarget = "all-models";
             pickerItems = [...availableModels];
             pickerIndex = 0;
             pickerScrollOffset = 0;
             view = "model-picker";
+          } else if (current === ASSIGN_ALL_EFFORT_KEY) {
+            pickerTarget = "all-models";
+            pickerIndex = 0;
+            view = "effort-picker";
           } else if (current === ASSIGN_CATEGORY_KEY) {
             pickerIndex = 0;
             view = "category-picker";
@@ -519,7 +585,20 @@ export function createSddProfilesModal(input: ModalInput) {
           }
         } else if (key === "e") {
           const current = selectedAgent();
-          if (current !== ASSIGN_ALL_SUBAGENTS_KEY && current !== ASSIGN_CATEGORY_KEY) {
+          stagedModel = undefined;
+          if (current === ASSIGN_ALL_SUBAGENTS_KEY || current === ASSIGN_ALL_EFFORT_KEY) {
+            pickerTarget = "all-models";
+            pickerIndex = 0;
+            view = "effort-picker";
+          } else if (current === ASSIGN_CATEGORY_KEY) {
+            pickerIndex = 0;
+            view = "category-picker";
+          } else if (current === ORCHESTRATOR_AGENT_KEY) {
+            pickerTarget = "default-model";
+            pickerIndex = 0;
+            view = "effort-picker";
+          } else {
+            pickerTarget = "agent-model";
             pickerIndex = 0;
             view = "effort-picker";
           }

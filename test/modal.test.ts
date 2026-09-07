@@ -160,10 +160,18 @@ describe("modal overlay component", () => {
     // Select second model (anthropic/claude-sonnet-4-5)
     modal.handleInput("\u001b[B"); // down
     modal.handleInput("\r"); // enter
+    lines = modal.render(80);
+    content = lines.join("\n");
+    expect(content).toContain("Nivel de Razonamiento"); // Prompted for effort!
 
-    // Move down to index 3 (sdd-explore) to customize individually
-    modal.handleInput("\u001b[B"); // down to index 2 (Category)
-    modal.handleInput("\u001b[B"); // down to index 3 (sdd-explore)
+    // Select effort (high) and confirm
+    modal.handleInput("\u001b[B"); // down
+    modal.handleInput("\r"); // enter (confirms effort)
+
+    // Now back in editor. Move down to sdd-explore to customize individually
+    modal.handleInput("\u001b[B"); // down to index 2 (All effort)
+    modal.handleInput("\u001b[B"); // down to index 3 (Category)
+    modal.handleInput("\u001b[B"); // down to index 4 (sdd-explore)
     modal.handleInput("\r"); // enter
     lines = modal.render(80);
     content = lines.join("\n");
@@ -172,7 +180,15 @@ describe("modal overlay component", () => {
     // Select third model (openai/o3-mini) for sdd-explore individually
     modal.handleInput("\u001b[B");
     modal.handleInput("\u001b[B");
-    modal.handleInput("\r");
+    modal.handleInput("\r"); // enter -> opens effort picker!
+    lines = modal.render(80);
+    content = lines.join("\n");
+    expect(content).toContain("Nivel de Razonamiento");
+
+    // Select low effort and confirm
+    modal.handleInput("\u001b[B"); // down
+    modal.handleInput("\u001b[B"); // down
+    modal.handleInput("\r"); // enter (confirms effort)
 
     // Press 'esc' to exit editor back to main list
     modal.handleInput("\u001b");
