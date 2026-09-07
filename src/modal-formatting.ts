@@ -69,13 +69,13 @@ export function frameModal(title: string, body: string[], width: number, theme?:
 
   const visibleTitleLen = visibleWidth(titleFormatted);
   const rightDashesCount = Math.max(0, innerWidth - visibleTitleLen);
-  const top = `${borderChar("╭")}${titleFormatted}${borderChar("─".repeat(rightDashesCount))}${borderChar("╮")}`;
-  const bottom = `${borderChar("╰")}${borderChar("─".repeat(innerWidth))}${borderChar("╯")}`;
+  const top = `${borderChar("╔")}${titleFormatted}${borderChar("═".repeat(rightDashesCount))}${borderChar("╗")}`;
+  const bottom = `${borderChar("╚")}${borderChar("═".repeat(innerWidth))}${borderChar("╝")}`;
 
   const rows = body.map((line) => {
     const padded = padToVisibleWidth(line, contentWidth);
     const bgRow = applyDarkVioletBg(` ${padded} `);
-    return `${borderChar("│")}${bgRow}${borderChar("│")}`;
+    return `${borderChar("║")}${bgRow}${borderChar("║")}`;
   });
 
   return [top, ...rows, bottom];

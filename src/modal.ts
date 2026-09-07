@@ -125,7 +125,7 @@ export function createSddProfilesModal(input: ModalInput) {
     const header = [
       `Estado: Perfil activo → ${activeProfileName ? cSuccess(`● ${activeProfileName}`) : cDim("(ninguno)")}${cDim(activeOrchestrator)}`,
       cMuted("Atajos: [Enter] Activar · [e] Editar · [n] Nuevo Perfil · [d] Borrar · [Esc] Salir"),
-      cDim("─".repeat(Math.max(10, width - 6))),
+      cDim("═".repeat(Math.max(10, width - 6))),
     ];
 
     const listLines: string[] = [];
@@ -151,7 +151,7 @@ export function createSddProfilesModal(input: ModalInput) {
 
     const currentP = selectedProfile();
     const footer = [
-      cDim("─".repeat(Math.max(10, width - 6))),
+      cDim("═".repeat(Math.max(10, width - 6))),
       currentP?.description ? `Descripción: ${cDim(currentP.description)}` : `Perfil: ${currentP?.name ?? "ninguno"}`,
     ];
 
@@ -167,13 +167,13 @@ export function createSddProfilesModal(input: ModalInput) {
     const header = [
       "Crear un nuevo perfil de modelos SDD y Orquestador:",
       cMuted("Escribí el nombre del nuevo perfil y presioná [Enter] para continuar al editor."),
-      cDim("─".repeat(Math.max(10, width - 6))),
+      cDim("═".repeat(Math.max(10, width - 6))),
     ];
 
     const inputLine = `  Nombre: ${cAccent(newProfileInput || "...")}${cAccent("█")}`;
 
     const footer = [
-      cDim("─".repeat(Math.max(10, width - 6))),
+      cDim("═".repeat(Math.max(10, width - 6))),
       cMuted("Atajos: [Enter] Crear y Configurar · [Esc] Cancelar"),
     ];
 
@@ -202,7 +202,7 @@ export function createSddProfilesModal(input: ModalInput) {
     const header = [
       `Perfil: ${cAccent(editingProfile.name)}${dirtyIndicator} · Orquestador: ${cMuted(editingProfile.default_model ?? "default")} (${editingProfile.default_effort ?? "medium"})`,
       cMuted("Atajos: [Enter/m] Cambiar modelo · [e] Esfuerzo · [a] A TODOS · [c] Categoría · [s] Guardar · [Esc] Volver"),
-      cDim("─".repeat(Math.max(10, width - 6))),
+      cDim("═".repeat(Math.max(10, width - 6))),
     ];
 
     const listLines: string[] = [];
@@ -230,7 +230,7 @@ export function createSddProfilesModal(input: ModalInput) {
     }
 
     const footer = [
-      cDim("─".repeat(Math.max(10, width - 6))),
+      cDim("═".repeat(Math.max(10, width - 6))),
       `Seleccionado: ${cAccent(selectedAgent())}`,
     ];
 
@@ -262,7 +262,7 @@ export function createSddProfilesModal(input: ModalInput) {
     const header = [
       `Asignar modelo a: ${cAccent(titleTarget)}`,
       cMuted("Atajos: [↑/↓] Navegar · [Enter] Seleccionar · [Esc] Cancelar"),
-      cDim("─".repeat(Math.max(10, width - 6))),
+      cDim("═".repeat(Math.max(10, width - 6))),
     ];
 
     const listLines: string[] = [];
@@ -297,7 +297,7 @@ export function createSddProfilesModal(input: ModalInput) {
     const header = [
       `Elegir nivel de razonamiento para: ${cAccent(titleTarget)}${modelInfo}`,
       cMuted("Atajos: [↑/↓] Navegar · [Enter] Confirmar · [Esc] Saltear esfuerzo"),
-      cDim("─".repeat(Math.max(10, width - 6))),
+      cDim("═".repeat(Math.max(10, width - 6))),
     ];
 
     const listLines: string[] = [];
@@ -331,7 +331,7 @@ export function createSddProfilesModal(input: ModalInput) {
     const header = [
       "Elegir qué categoría de agentes configurar en lote:",
       cMuted("Atajos: [↑/↓] Navegar · [Enter] Elegir · [Esc] Cancelar"),
-      cDim("─".repeat(Math.max(10, width - 6))),
+      cDim("═".repeat(Math.max(10, width - 6))),
     ];
 
     const categoryRows = [
