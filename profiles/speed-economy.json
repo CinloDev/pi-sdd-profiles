@@ -1,0 +1,19 @@
+{
+  "name": "speed-economy",
+  "description": "Velocidad y bajo costo para iteraciones ágiles y tareas directas",
+  "default_model": "anthropic/claude-haiku-4-5",
+  "default_effort": "low",
+  "model_profiles": {
+    "sdd-explore": { "model": "anthropic/claude-haiku-4-5", "effort": "low" },
+    "sdd-verify": { "model": "anthropic/claude-haiku-4-5", "effort": "low" },
+    "sdd-propose": { "model": "anthropic/claude-sonnet-4-5", "effort": "medium" },
+    "sdd-spec": { "model": "anthropic/claude-sonnet-4-5", "effort": "medium" },
+    "sdd-design": { "model": "anthropic/claude-sonnet-4-5", "effort": "medium" },
+    "sdd-tasks": { "model": "anthropic/claude-sonnet-4-5", "effort": "medium" },
+    "sdd-apply": { "model": "anthropic/claude-sonnet-4-5", "effort": "medium" },
+    "sdd-archive": { "model": "anthropic/claude-haiku-4-5", "effort": "low" },
+    "jd-judge-a": { "model": "anthropic/claude-haiku-4-5", "effort": "medium" },
+    "jd-judge-b": { "model": "anthropic/claude-haiku-4-5", "effort": "medium" },
+    "jd-fix-agent": { "model": "anthropic/claude-sonnet-4-5", "effort": "medium" }
+  }
+}

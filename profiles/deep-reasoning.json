@@ -1,0 +1,19 @@
+{
+  "name": "deep-reasoning",
+  "description": "Máximo esfuerzo de razonamiento en fases críticas de diseño y revisión",
+  "default_model": "openai/o3-mini",
+  "default_effort": "high",
+  "model_profiles": {
+    "sdd-explore": { "model": "anthropic/claude-sonnet-4-5", "effort": "medium" },
+    "sdd-verify": { "model": "anthropic/claude-sonnet-4-5", "effort": "medium" },
+    "sdd-propose": { "model": "openai/o3-mini", "effort": "max" },
+    "sdd-spec": { "model": "openai/o3-mini", "effort": "max" },
+    "sdd-design": { "model": "openai/o3-mini", "effort": "max" },
+    "sdd-tasks": { "model": "openai/o3-mini", "effort": "high" },
+    "sdd-apply": { "model": "anthropic/claude-sonnet-4-5", "effort": "high" },
+    "sdd-archive": { "model": "anthropic/claude-haiku-4-5", "effort": "low" },
+    "jd-judge-a": { "model": "openai/o3-mini", "effort": "max" },
+    "jd-judge-b": { "model": "anthropic/claude-sonnet-4-5", "effort": "high" },
+    "jd-fix-agent": { "model": "openai/o3-mini", "effort": "max" }
+  }
+}
