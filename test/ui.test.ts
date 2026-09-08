@@ -3,6 +3,7 @@ import {
   formatProfileList,
   formatProfileDetail,
   runInteractiveProfileCreate,
+  runInteractiveProfileSelect,
 } from "../src/ui.js";
 import type { Profile, ProfileSummary } from "../src/types.js";
 
@@ -132,5 +133,56 @@ describe("ui formatting module", () => {
         default_model: "anthropic/claude-sonnet-4-5",
       })
     );
+  });
+
+  it("should allow renaming profile interactively in fallback selector", async () => {
+    const mockManager: any = {
+      listProfiles: vi.fn(() => [
+        { name: "custom-p", scope: "global", agent_count: 5, is_active: false },
+        { name: "builtin-p", scope: "builtin", agent_count: 5, is_active: false },
+      ]),
+      getActiveProfileName: vi.fn(() => null),
+      renameProfile: vi.fn(() => ({ success: true, message: 'Perfil renombrado a "renamed-p".' })),
+    };
+
+    const mockCtx: any = {
+      ui: {
+        select: vi
+          .fn()
+          .mockResolvedValueOnce("📝 [Renombrar un perfil...]")
+          .mockResolvedValueOnce("custom-p"),
+        input: vi.fn().mockResolvedValueOnce("renamed-p"),
+        notify: vi.fn(),
+      },
+    };
+
+    const res = await runInteractiveProfileSelect(mockManager, mockCtx);
+    expect(res).toContain("renamed-p");
+    expect(mockManager.renameProfile).toHaveBeenCalledWith("custom-p", "renamed-p");
+  });
+
+  it("should allow deleting profile interactively in fallback selector", async () => {
+    const mockManager: any = {
+      listProfiles: vi.fn(() => [
+        { name: "custom-p", scope: "global", agent_count: 5, is_active: false },
+      ]),
+      getActiveProfileName: vi.fn(() => null),
+      deleteProfile: vi.fn(() => true),
+    };
+
+    const mockCtx: any = {
+      ui: {
+        select: vi
+          .fn()
+          .mockResolvedValueOnce("🗑️ [Eliminar un perfil...]")
+          .mockResolvedValueOnce("custom-p"),
+        confirm: vi.fn().mockResolvedValueOnce(true),
+        notify: vi.fn(),
+      },
+    };
+
+    const res = await runInteractiveProfileSelect(mockManager, mockCtx);
+    expect(res).toContain('Perfil "custom-p" eliminado.');
+    expect(mockManager.deleteProfile).toHaveBeenCalledWith("custom-p");
   });
 });

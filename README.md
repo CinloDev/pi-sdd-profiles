@@ -23,7 +23,7 @@ Se integra de forma transparente y atómica con [`pi-subagents-j0k3r`](https://g
 - 🛡️ **Escritura Atómica Segura**: Preserva 100% de la configuración de `subagents.json` (`timeout_ms`, `history_panel_shortcut`, `default_tools`, etc.) y previene escrituras corruptas vía archivos temporales y renombrado atómico.
 - 🌐 **Soporte Global y por Proyecto**: Tus perfiles personalizados se guardan localmente en `~/.pi/agent/profiles/` (globales) o en `.pi/profiles/` (del proyecto).
 - 🧠 **Skill Incluida**: Provee la skill `sdd-profiles` para que el orquestador y los agentes sepan gobernar y sugerir perfiles.
-- 🤖 **Herramientas para el Orquestador**: Expone `sdd_profile_list` y `sdd_profile_switch` como tools para que el orquestador pueda conmutar perfiles programáticamente cuando una fase lo requiera.
+- 🤖 **Herramientas para el Orquestador**: Expone `sdd_profile_list`, `sdd_profile_switch`, `sdd_profile_rename` y `sdd_profile_delete` como tools para que el orquestador pueda conmutar o administrar perfiles programáticamente.
 
 ---
 
@@ -33,8 +33,9 @@ Se integra de forma transparente y atómica con [`pi-subagents-j0k3r`](https://g
 - `↑` / `↓` o `j` / `k`: Moverse entre los perfiles disponibles.
 - `Enter`: Activar el perfil seleccionado en caliente (permanece abierto con confirmación visual para que puedas seguir configurando o explorando).
 - `e`: Abrir el editor de modelos del perfil seleccionado.
+- `r`: Renombrar el perfil seleccionado (abre una pantalla rápida para editar el nombre).
 - `n`: Crear un nuevo perfil personalizado.
-- `d`: Borrar perfil personalizado. 
+- `d` / `Supr` (`Delete`): Borrar perfil personalizado (con diálogo de confirmación para evitar pérdidas accidentales). 
 - `Esc` o `q`: Cerrar la ventana flotante.
 
 ### Vista de Edición (`e` dentro de un perfil)
@@ -77,6 +78,7 @@ Al asignar un modelo a cualquier agente o categoría, se abre la lista flotante 
 | `/sdd-profile set <perfil> <agente> <modelo> [effort]` | Asigna o modifica el modelo de un agente específico dentro de un perfil. |
 | `/sdd-profile list` | Muestra en el chat el listado completo de perfiles disponibles y sus scopes. |
 | `/sdd-profile show <nombre>` | Muestra el desglose detallado de modelos asignados por categoría (Núcleo SDD, Judgment Day, Revisores, etc.). |
+| `/sdd-profile rename <nombre> <nuevo>` | Renombra un perfil personalizado existente y actualiza el puntero activo si estaba seleccionado. |
 | `/sdd-profile delete <nombre>` | Elimina un perfil personalizado creado por el usuario. |
 
 ### Atajo de teclado

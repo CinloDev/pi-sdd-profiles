@@ -419,11 +419,15 @@ export async function runInteractiveProfileSelect(
 
   const CREATE_ACTION = "➕ [Crear nuevo perfil...]";
   const EDIT_ACTION = "✏️ [Editar modelos de un perfil...]";
+  const RENAME_ACTION = "📝 [Renombrar un perfil...]";
+  const DELETE_ACTION = "🗑️ [Eliminar un perfil...]";
 
   // Build options for select
   const options = [
     CREATE_ACTION,
     EDIT_ACTION,
+    RENAME_ACTION,
+    DELETE_ACTION,
     ...profiles.map((p) => {
       const activeMark = p.is_active || (activeName && p.name.toLowerCase() === activeName.toLowerCase()) ? "● " : "○ ";
       const model = p.default_model ? ` (${p.default_model})` : "";
@@ -443,6 +447,47 @@ export async function runInteractiveProfileSelect(
     const chosen = await ctx.ui.select("Elegir perfil a editar:", editChoices);
     if (!chosen) return undefined;
     return runInteractiveProfileEdit(manager, ctx, chosen);
+  }
+
+  if (selectedOption === RENAME_ACTION) {
+    const choices = profiles.map((p) => p.name);
+    if (choices.length === 0) {
+      ctx.ui.notify?.("No hay perfiles para renombrar.", "warning");
+      return undefined;
+    }
+    const chosen = await ctx.ui.select("Elegir perfil a renombrar:", choices);
+    if (!chosen) return undefined;
+
+    const newName = await ctx.ui.input?.(`Nuevo nombre para "${chosen}":`, chosen);
+    if (!newName || !newName.trim()) {
+      ctx.ui.notify?.("Renombramiento cancelado.", "info");
+      return undefined;
+    }
+    const res = manager.renameProfile(chosen, newName.trim());
+    ctx.ui.notify?.(res.message, res.success ? "info" : "warning");
+    return res.message;
+  }
+
+  if (selectedOption === DELETE_ACTION) {
+    const choices = profiles.map((p) => p.name);
+    if (choices.length === 0) {
+      ctx.ui.notify?.("No hay perfiles para eliminar.", "warning");
+      return undefined;
+    }
+    const chosen = await ctx.ui.select("Elegir perfil a eliminar:", choices);
+    if (!chosen) return undefined;
+
+    if (ctx.ui.confirm) {
+      const confirmed = await ctx.ui.confirm("Eliminar Perfil", `¿Seguro que querés eliminar el perfil "${chosen}"?`);
+      if (!confirmed) {
+        ctx.ui.notify?.("Eliminación cancelada.", "info");
+        return undefined;
+      }
+    }
+    const deleted = manager.deleteProfile(chosen);
+    const msg = deleted ? `Perfil "${chosen}" eliminado.` : `No se pudo eliminar el perfil "${chosen}".`;
+    ctx.ui.notify?.(msg, deleted ? "info" : "warning");
+    return msg;
   }
 
   // Extract profile name from the selected option string

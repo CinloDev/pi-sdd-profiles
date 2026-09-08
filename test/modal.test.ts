@@ -1,7 +1,10 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { createSddProfilesModal } from "../src/modal.js";
 
 describe("modal overlay component", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
   const mockProfiles = [
     {
       name: "cin",
@@ -262,5 +265,102 @@ describe("modal overlay component", () => {
 
     modal.handleInput("\u001b"); // esc
     expect(done).toHaveBeenCalledWith({ action: "closed" });
+  });
+
+  it("should prompt confirmation when deleting a custom profile and delete on confirm", () => {
+    const done = vi.fn();
+    mockManager.deleteProfile.mockReturnValueOnce(true);
+    const modal = createSddProfilesModal({
+      manager: mockManager,
+      availableModels,
+      done,
+    });
+
+    // Index 0 is "cin" (global)
+    // Press 'd' to initiate delete
+    modal.handleInput("d");
+    let lines = modal.render(80);
+    expect(lines.join("\n")).toContain("Confirmar Eliminación");
+    expect(lines.join("\n")).toContain("cin");
+
+    // Cancel with Esc first
+    modal.handleInput("\u001b");
+    lines = modal.render(80);
+    expect(lines.join("\n")).toContain("SDD Profile Manager");
+    expect(mockManager.deleteProfile).not.toHaveBeenCalled();
+
+    // Press 'd' again and confirm with Enter
+    modal.handleInput("d");
+    modal.handleInput("\r");
+    expect(mockManager.deleteProfile).toHaveBeenCalledWith("cin");
+    lines = modal.render(80);
+    expect(lines.join("\n")).toContain("eliminado");
+  });
+
+  it("should support physical delete key and allow deleting any profile with confirmation", () => {
+    const done = vi.fn();
+    mockManager.deleteProfile.mockReturnValueOnce(true);
+    const modal = createSddProfilesModal({
+      manager: mockManager,
+      availableModels,
+      done,
+    });
+
+    // Move to index 1 ("deep-reasoning", builtin)
+    modal.handleInput("\u001b[B"); // down
+    // Press Delete key (\u001b[3~)
+    modal.handleInput("\u001b[3~");
+
+    // Opens confirmation dialog
+    let lines = modal.render(80);
+    expect(lines.join("\n")).toContain("Confirmar Eliminación");
+    expect(lines.join("\n")).toContain("deep-reasoning");
+
+    // Confirm with Enter
+    modal.handleInput("\r");
+    expect(mockManager.deleteProfile).toHaveBeenCalledWith("deep-reasoning");
+    lines = modal.render(80);
+    expect(lines.join("\n")).toContain("eliminado");
+  });
+
+  it("should rename any profile on 'r' including builtin profiles", () => {
+    const done = vi.fn();
+    mockManager.renameProfile = vi.fn((oldName, newName) => ({
+      success: true,
+      message: `Perfil "${oldName}" renombrado correctamente a "${newName}".`,
+    }));
+
+    const modal = createSddProfilesModal({
+      manager: mockManager,
+      availableModels,
+      done,
+    });
+
+    // Index 0 is "cin" (global)
+    // Press 'r' to rename
+    modal.handleInput("r");
+    let lines = modal.render(80);
+    expect(lines.join("\n")).toContain("Renombrar Perfil");
+    expect(lines.join("\n")).toContain("cin");
+
+    // Type "-updated"
+    "-updated".split("").forEach((ch) => modal.handleInput(ch));
+    // Press Enter
+    modal.handleInput("\r");
+
+    expect(mockManager.renameProfile).toHaveBeenCalledWith("cin", "cin-updated");
+    lines = modal.render(80);
+    expect(lines.join("\n")).toContain("renombrado");
+
+    // Move to builtin profile (index 1: deep-reasoning) and press 'r'
+    modal.handleInput("\u001b[B"); // down
+    modal.handleInput("r");
+    lines = modal.render(80);
+    expect(lines.join("\n")).toContain("Renombrar Perfil");
+    expect(lines.join("\n")).toContain("deep-reasoning");
+
+    // Confirm rename of builtin
+    modal.handleInput("\r");
+    expect(mockManager.renameProfile).toHaveBeenCalledWith("deep-reasoning", "deep-reasoning");
   });
 });

@@ -67,14 +67,17 @@ Profiles are loaded with hierarchical precedence:
 | `/sdd-profile save <name> [desc] [--project]` | Takes a snapshot of current `subagents.json` settings and saves it as a profile. |
 | `/sdd-profile show <name>` | Shows detailed model and reasoning effort assignments by phase. |
 | `/sdd-profile set <profile> <agent> <model> [effort]` | Assigns a specific model to an agent in a profile. |
-| `/sdd-profile delete <name>` | Deletes a user profile (builtins cannot be deleted). |
+| `/sdd-profile rename <name> <new-name>` | Renames an existing profile and updates active state if needed. |
+| `/sdd-profile delete <name>` | Deletes any profile (including builtins/templates). |
 
 ## Programmatic Tools for Orchestrators
 
-When operating as an autonomous orchestrator, you can inspect or switch profiles programmatically:
+When operating as an autonomous orchestrator, you can inspect, switch, or manage profiles programmatically:
 
 - `sdd_profile_list`: Returns the active profile and list of all available profiles with metadata.
 - `sdd_profile_switch(profile_name, scope?)`: Activates a profile in `global` (default) or `project` configuration.
+- `sdd_profile_rename(old_name, new_name)`: Renames a custom profile safely.
+- `sdd_profile_delete(profile_name)`: Deletes a custom profile and cleans active state if needed.
 
 ## Strategic Model Allocation Guidelines
 

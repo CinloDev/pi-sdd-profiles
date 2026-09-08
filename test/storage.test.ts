@@ -132,13 +132,47 @@ describe("storage module", () => {
     expect(path.dirname(savedPath)).toBe(projectDir);
   });
 
-  it("should delete custom profiles and disallow deleting builtin profiles", () => {
+  it("should delete custom profiles as well as builtin profiles, clearing active state if active", () => {
+    storage.setActiveProfileName("cinlo-flash");
+    expect(storage.getActiveProfileName()).toBe("cinlo-flash");
+
     expect(storage.deleteProfile("cinlo-flash")).toBe(true);
     expect(storage.loadProfile("cinlo-flash")).toBeNull();
+    expect(storage.getActiveProfileName()).toBeNull();
 
-    // Builtin should reject deletion
-    expect(storage.deleteProfile("balanced")).toBe(false);
-    expect(storage.loadProfile("balanced")).toBeDefined();
+    // Builtin should also be deletable
+    expect(storage.deleteProfile("balanced")).toBe(true);
+    expect(storage.loadProfile("balanced")).toBeNull();
+    const remaining = storage.listProfiles().map((p) => p.name);
+    expect(remaining).not.toContain("balanced");
+  });
+
+  it("should rename custom profiles and update active state if active", () => {
+    storage.setActiveProfileName("cinlo-flash");
+
+    const res = storage.renameProfile("cinlo-flash", "cinlo-gemini");
+    expect(res.success).toBe(true);
+    expect(storage.loadProfile("cinlo-flash")).toBeNull();
+
+    const renamed = storage.loadProfile("cinlo-gemini");
+    expect(renamed).toBeDefined();
+    expect(renamed?.name).toBe("cinlo-gemini");
+    expect(storage.getActiveProfileName()).toBe("cinlo-gemini");
+  });
+
+  it("should allow renaming builtin profiles and fail when colliding or empty", () => {
+    const builtinRes = storage.renameProfile("balanced", "new-balanced");
+    expect(builtinRes.success).toBe(true);
+    expect(storage.loadProfile("balanced")).toBeNull();
+    expect(storage.loadProfile("new-balanced")).toBeDefined();
+
+    const collisionRes = storage.renameProfile("cinlo-flash", "project-special");
+    expect(collisionRes.success).toBe(false);
+    expect(collisionRes.message).toContain("Ya existe");
+
+    const emptyRes = storage.renameProfile("cinlo-flash", "   ");
+    expect(emptyRes.success).toBe(false);
+    expect(emptyRes.message).toContain("vacío");
   });
 
   it("should track and persist active profile name", () => {
