@@ -45,6 +45,44 @@ export class ProfileStorage {
     return name.trim().toLowerCase().replace(/[^a-z0-9_-]/g, "-");
   }
 
+  private getDeletedProfilesPath(): string {
+    return path.join(this.globalDir, ".deleted-profiles");
+  }
+
+  private getDeletedProfiles(): Set<string> {
+    const filePath = this.getDeletedProfilesPath();
+    if (!fs.existsSync(filePath)) return new Set();
+    try {
+      const raw = fs.readFileSync(filePath, "utf-8");
+      const lines = raw.split("\n").map((s) => this.sanitizeName(s)).filter(Boolean);
+      return new Set(lines);
+    } catch {
+      return new Set();
+    }
+  }
+
+  private addDeletedProfile(name: string): void {
+    const set = this.getDeletedProfiles();
+    set.add(this.sanitizeName(name));
+    try {
+      if (!fs.existsSync(this.globalDir)) {
+        fs.mkdirSync(this.globalDir, { recursive: true });
+      }
+      fs.writeFileSync(this.getDeletedProfilesPath(), Array.from(set).join("\n"), "utf-8");
+    } catch {}
+  }
+
+  private removeDeletedProfile(name: string): void {
+    const set = this.getDeletedProfiles();
+    const key = this.sanitizeName(name);
+    if (set.has(key)) {
+      set.delete(key);
+      try {
+        fs.writeFileSync(this.getDeletedProfilesPath(), Array.from(set).join("\n"), "utf-8");
+      } catch {}
+    }
+  }
+
   /**
    * Reads all JSON profile files from a given directory.
    */
@@ -54,6 +92,8 @@ export class ProfileStorage {
   ): Map<string, { profile: Profile; path: string }> {
     const map = new Map<string, { profile: Profile; path: string }>();
     if (!fs.existsSync(dir)) return map;
+
+    const deletedBuiltins = scope === "builtin" ? this.getDeletedProfiles() : new Set<string>();
 
     try {
       const files = fs.readdirSync(dir);
@@ -65,6 +105,7 @@ export class ProfileStorage {
           const data = JSON.parse(raw) as Profile;
           if (data && typeof data === "object" && data.name) {
             const normalizedKey = this.sanitizeName(data.name);
+            if (deletedBuiltins.has(normalizedKey)) continue;
             map.set(normalizedKey, { profile: data, path: filePath });
           }
         } catch {
@@ -142,12 +183,14 @@ export class ProfileStorage {
       } catch {}
     }
 
-    // 3. Builtin
-    const builtinPath = path.join(this.builtinsDir, `${key}.json`);
-    if (fs.existsSync(builtinPath)) {
-      try {
-        return JSON.parse(fs.readFileSync(builtinPath, "utf-8")) as Profile;
-      } catch {}
+    // 3. Builtin (only if not marked deleted)
+    if (!this.getDeletedProfiles().has(key)) {
+      const builtinPath = path.join(this.builtinsDir, `${key}.json`);
+      if (fs.existsSync(builtinPath)) {
+        try {
+          return JSON.parse(fs.readFileSync(builtinPath, "utf-8")) as Profile;
+        } catch {}
+      }
     }
 
     return null;
@@ -163,6 +206,7 @@ export class ProfileStorage {
     }
 
     const key = this.sanitizeName(profile.name);
+    this.removeDeletedProfile(key);
     const targetPath = path.join(targetDir, `${key}.json`);
 
     const payload: Profile = {
@@ -183,8 +227,19 @@ export class ProfileStorage {
   }
 
   /**
-   * Deletes a profile from project or global scope.
-   * Returns false if not found or if it is a builtin profile.
+   * Clears the currently active profile name.
+   */
+  clearActiveProfileName(): void {
+    if (fs.existsSync(this.activeStatePath)) {
+      try {
+        fs.unlinkSync(this.activeStatePath);
+      } catch {}
+    }
+  }
+
+  /**
+   * Deletes a profile from project, global, or builtin scope.
+   * Clears active state if the deleted profile was active.
    */
   deleteProfile(name: string): boolean {
     const key = this.sanitizeName(name);
@@ -193,18 +248,103 @@ export class ProfileStorage {
     // Check project first
     const projectPath = path.join(this.projectDir, `${key}.json`);
     if (fs.existsSync(projectPath)) {
-      fs.unlinkSync(projectPath);
-      deleted = true;
+      try {
+        fs.unlinkSync(projectPath);
+        deleted = true;
+      } catch {}
     }
 
     // Check global
     const globalPath = path.join(this.globalDir, `${key}.json`);
     if (fs.existsSync(globalPath)) {
-      fs.unlinkSync(globalPath);
+      try {
+        fs.unlinkSync(globalPath);
+        deleted = true;
+      } catch {}
+    }
+
+    // Check builtin (mark deleted in persistent tombstone so package templates remain intact for new users)
+    const builtinPath = path.join(this.builtinsDir, `${key}.json`);
+    if (fs.existsSync(builtinPath) && !this.getDeletedProfiles().has(key)) {
+      this.addDeletedProfile(key);
       deleted = true;
     }
 
+    if (deleted) {
+      const active = this.getActiveProfileName();
+      if (active && this.sanitizeName(active) === key) {
+        this.clearActiveProfileName();
+      }
+    }
+
     return deleted;
+  }
+
+  /**
+   * Renames any profile in project, global, or builtin scope.
+   * Returns an object indicating success, message, and target path.
+   */
+  renameProfile(
+    oldName: string,
+    newName: string
+  ): { success: boolean; message: string; targetPath?: string } {
+    const trimmedNew = newName.trim();
+    if (!trimmedNew) {
+      return { success: false, message: "El nuevo nombre no puede estar vacío." };
+    }
+
+    const oldKey = this.sanitizeName(oldName);
+    const newKey = this.sanitizeName(trimmedNew);
+
+    if (oldKey === newKey) {
+      return { success: false, message: "El nuevo nombre debe ser diferente al actual." };
+    }
+
+    const original = this.loadProfile(oldName);
+    if (!original) {
+      return {
+        success: false,
+        message: `Perfil "${oldName}" no encontrado.`,
+      };
+    }
+
+    // Check if new name already exists
+    if (this.loadProfile(trimmedNew)) {
+      return {
+        success: false,
+        message: `Ya existe un perfil con el nombre "${trimmedNew}".`,
+      };
+    }
+
+    // Determine target scope: if original file was in project, save to project, else global
+    const projectPath = path.join(this.projectDir, `${oldKey}.json`);
+    const targetScope: "project" | "global" = fs.existsSync(projectPath) ? "project" : "global";
+
+    const updatedProfile: Profile = {
+      ...original,
+      name: trimmedNew,
+      updated_at: new Date().toISOString(),
+    };
+
+    const savedPath = this.saveProfile(updatedProfile, targetScope);
+
+    // Check if the old profile was currently active
+    const active = this.getActiveProfileName();
+    const wasActive = Boolean(active && this.sanitizeName(active) === oldKey);
+
+    // Delete old profile
+    this.deleteProfile(oldName);
+
+    // Update active state if the renamed profile was active
+    if (wasActive) {
+      this.setActiveProfileName(trimmedNew);
+    }
+
+    return {
+      success: true,
+      message: `Perfil "${oldName}" renombrado correctamente a "${trimmedNew}".`,
+      targetPath: savedPath,
+    };
   }
 
   /**

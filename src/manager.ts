@@ -179,6 +179,22 @@ export class SddProfileManager {
     };
   }
 
+  renameProfile(
+    oldName: string,
+    newName: string
+  ): { success: boolean; message: string; profile?: Profile } {
+    const res = this.storage.renameProfile(oldName, newName);
+    if (!res.success) {
+      return { success: false, message: res.message };
+    }
+    const loaded = this.storage.loadProfile(newName);
+    return {
+      success: true,
+      message: res.message,
+      profile: loaded ?? undefined,
+    };
+  }
+
   deleteProfile(name: string): boolean {
     return this.storage.deleteProfile(name);
   }

@@ -11,6 +11,8 @@ import {
 export type ModalView =
   | "profiles-list"
   | "create-profile"
+  | "rename-profile"
+  | "confirm-delete"
   | "profile-editor"
   | "model-picker"
   | "effort-picker"
@@ -55,6 +57,12 @@ export function createSddProfilesModal(input: ModalInput) {
 
   // State for new profile creation view
   let newProfileInput = "";
+
+  // State for rename and delete confirmation views
+  let renamingOldName = "";
+  let renameProfileInput = "";
+  let renameErrorMessage: string | null = null;
+  let deletingProfileName = "";
 
   // Editing state for profile-editor
   let editingProfile: Profile | null = null;
@@ -154,10 +162,23 @@ export function createSddProfilesModal(input: ModalInput) {
     const activeProfileObj = activeProfileName ? manager.getProfile(activeProfileName) : null;
     const activeOrchestrator = activeProfileObj?.default_model ? ` · Orquestador: ${activeProfileObj.default_model}` : "";
 
+    const isWarningFeedback = feedbackMessage && (
+      feedbackMessage.includes("Error") ||
+      feedbackMessage.includes("no se puede") ||
+      feedbackMessage.includes("No se puede") ||
+      feedbackMessage.includes("integrados") ||
+      feedbackMessage.includes("vacío") ||
+      feedbackMessage.includes("Ya existe")
+    );
+
     const header = [
       `Estado: Perfil activo → ${activeProfileName ? cSuccess(`● ${activeProfileName}`) : cDim("(ninguno)")}${cDim(activeOrchestrator)}`,
-      ...(feedbackMessage ? [cSuccess(`✔ ${feedbackMessage}`)] : []),
-      cMuted("Atajos: [Enter] Activar · [e] Editar · [n] Nuevo Perfil · [d] Borrar · [Esc/q] Salir"),
+      ...(feedbackMessage
+        ? [isWarningFeedback
+            ? (theme?.fg ? theme.fg("warning", `⚠️ ${feedbackMessage}`) : `⚠️ ${feedbackMessage}`)
+            : cSuccess(`✔ ${feedbackMessage}`)]
+        : []),
+      cMuted("[Enter] Activar · [e] Editar · [r] Renombrar · [n] Nuevo · [d] Borrar · [Esc] Salir"),
       cDim("═".repeat(Math.max(10, width - 6))),
     ];
 
@@ -213,6 +234,57 @@ export function createSddProfilesModal(input: ModalInput) {
     return frameModal("➕ Nuevo Perfil SDD", [...header, "", inputLine, "", ...footer], width, theme);
   };
 
+  // View: Rename Profile
+  const renderRenameProfile = (width: number): string[] => {
+    const cAccent = (t: string) => (theme?.fg ? theme.fg("accent", t) : t);
+    const cMuted = (t: string) => (theme?.fg ? theme.fg("muted", t) : t);
+    const cDim = (t: string) => (theme?.fg ? theme.fg("dim", t) : t);
+    const cWarning = (t: string) => (theme?.fg ? theme.fg("warning", t) : t);
+
+    const header = [
+      `Renombrar perfil: ${cAccent(renamingOldName)}`,
+      cMuted("Escribí el nuevo nombre y presioná [Enter] para guardar."),
+      cDim("═".repeat(Math.max(10, width - 6))),
+    ];
+
+    const inputLine = `  Nuevo nombre: ${cAccent(renameProfileInput || "...")}${cAccent("█")}`;
+    const errorLine = renameErrorMessage ? cWarning(`  ✖ ${renameErrorMessage}`) : "";
+
+    const footer = [
+      cDim("═".repeat(Math.max(10, width - 6))),
+      cMuted("Atajos: [Enter] Guardar Nombre · [Esc] Cancelar"),
+    ];
+
+    return frameModal("✏️ Renombrar Perfil SDD", [...header, "", inputLine, errorLine, ...footer], width, theme);
+  };
+
+  // View: Confirm Delete Profile
+  const renderConfirmDelete = (width: number): string[] => {
+    const cWarning = (t: string) => (theme?.fg ? theme.fg("warning", t) : t);
+    const cMuted = (t: string) => (theme?.fg ? theme.fg("muted", t) : t);
+    const cAccent = (t: string) => (theme?.fg ? theme.fg("accent", t) : t);
+    const cDim = (t: string) => (theme?.fg ? theme.fg("dim", t) : t);
+
+    const header = [
+      cWarning("⚠️ ¿Estás segura de que querés eliminar este perfil?"),
+      `Perfil a borrar: ${cAccent(deletingProfileName)}`,
+      cDim("═".repeat(Math.max(10, width - 6))),
+    ];
+
+    const warningBody = [
+      "",
+      cMuted("  Esta acción eliminará el archivo del perfil permanentemente de disco."),
+      "",
+    ];
+
+    const footer = [
+      cDim("═".repeat(Math.max(10, width - 6))),
+      cMuted("Atajos: [Enter / y] Confirmar Eliminación · [Esc / n] Cancelar"),
+    ];
+
+    return frameModal("🗑️ Confirmar Eliminación", [...header, ...warningBody, ...footer], width, theme);
+  };
+
   // View: Profile Editor
   const renderProfileEditor = (width: number): string[] => {
     if (!editingProfile) return ["Error: perfil no cargado"];
@@ -234,7 +306,7 @@ export function createSddProfilesModal(input: ModalInput) {
 
     const header = [
       `Perfil: ${cAccent(editingProfile.name)}${dirtyIndicator} · Orquestador: ${cMuted(editingProfile.default_model ?? "default")} (${editingProfile.default_effort ?? "medium"})`,
-      cMuted("Atajos: [Enter/m] Cambiar modelo · [e] Esfuerzo · [a] A TODOS · [c] Categoría · [s] Guardar · [Esc] Volver"),
+      cMuted("[Enter/m] Modelo · [e] Esfuerzo · [a] A todos · [c] Categoría · [s] Guardar · [Esc] Volver"),
       cDim("═".repeat(Math.max(10, width - 6))),
     ];
 
@@ -300,7 +372,7 @@ export function createSddProfilesModal(input: ModalInput) {
     const header = [
       `Asignar modelo a: ${cAccent(titleTarget)}`,
       filterBox,
-      cMuted("Atajos: [Escribir] Filtrar · [↑/↓] Navegar · [Enter] Seleccionar · [Backspace] Borrar · [Esc] Volver"),
+      cMuted("[Escribir] Filtrar · [↑/↓] Navegar · [Enter] Elegir · [Backspace] Borrar · [Esc] Volver"),
       cDim("═".repeat(Math.max(10, width - 6))),
     ];
 
@@ -396,6 +468,8 @@ export function createSddProfilesModal(input: ModalInput) {
   return {
     render(width: number): string[] {
       if (view === "create-profile") return constrainLines(renderCreateProfile(width), width);
+      if (view === "rename-profile") return constrainLines(renderRenameProfile(width), width);
+      if (view === "confirm-delete") return constrainLines(renderConfirmDelete(width), width);
       if (view === "profile-editor") return constrainLines(renderProfileEditor(width), width);
       if (view === "model-picker") return constrainLines(renderModelPicker(width), width);
       if (view === "effort-picker") return constrainLines(renderEffortPicker(width), width);
@@ -440,6 +514,57 @@ export function createSddProfilesModal(input: ModalInput) {
           }
         } else if (data.length === 1 && /^[\w\-\. ]$/.test(data)) {
           newProfileInput += data;
+        }
+        requestRender();
+        return;
+      }
+
+      // --- Sub-View: Rename Profile ---
+      if (view === "rename-profile") {
+        if (key === "esc") {
+          view = "profiles-list";
+          renameProfileInput = "";
+          renameErrorMessage = null;
+        } else if (key === "backspace") {
+          renameProfileInput = renameProfileInput.slice(0, -1);
+          renameErrorMessage = null;
+        } else if (key === "enter") {
+          const trimmed = renameProfileInput.trim();
+          if (!trimmed) {
+            renameErrorMessage = "El nombre no puede estar vacío.";
+          } else {
+            const res = manager.renameProfile(renamingOldName, trimmed);
+            if (res.success) {
+              refreshProfiles();
+              const newIdx = profiles.findIndex((p) => p.name.toLowerCase() === trimmed.toLowerCase());
+              if (newIdx !== -1) selectedProfileIndex = newIdx;
+              feedbackMessage = res.message;
+              view = "profiles-list";
+              renameProfileInput = "";
+              renameErrorMessage = null;
+            } else {
+              renameErrorMessage = res.message;
+            }
+          }
+        } else if (data.length === 1 && /^[\w\-\. ]$/.test(data)) {
+          renameProfileInput += data;
+          renameErrorMessage = null;
+        }
+        requestRender();
+        return;
+      }
+
+      // --- Sub-View: Confirm Delete ---
+      if (view === "confirm-delete") {
+        if (key === "esc" || key === "n" || key === "N") {
+          view = "profiles-list";
+          deletingProfileName = "";
+        } else if (key === "enter" || key === "y" || key === "Y" || key === "d") {
+          manager.deleteProfile(deletingProfileName);
+          refreshProfiles();
+          feedbackMessage = `Perfil "${deletingProfileName}" eliminado correctamente.`;
+          deletingProfileName = "";
+          view = "profiles-list";
         }
         requestRender();
         return;
@@ -732,13 +857,23 @@ export function createSddProfilesModal(input: ModalInput) {
             view = "profile-editor";
           }
         }
-      } else if (key === "d") {
+      } else if (key === "r") {
+        // Rename selected profile
+        const target = selectedProfile();
+        if (target) {
+          renamingOldName = target.name;
+          renameProfileInput = target.name;
+          renameErrorMessage = null;
+          feedbackMessage = null;
+          view = "rename-profile";
+        }
+      } else if (key === "d" || key === "delete") {
         // Delete selected profile
         const target = selectedProfile();
-        if (target && target.scope !== "builtin") {
-          manager.deleteProfile(target.name);
-          refreshProfiles();
-          feedbackMessage = `Perfil "${target.name}" eliminado.`;
+        if (target) {
+          deletingProfileName = target.name;
+          feedbackMessage = null;
+          view = "confirm-delete";
         }
       }
 

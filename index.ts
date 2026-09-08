@@ -102,11 +102,17 @@ export default function sddProfilesExtension(pi: any): void {
           }),
         {
           overlay: true,
-          overlayOptions: {
-            anchor: "center",
-            width: "88%",
-            maxHeight: "85%",
-            minWidth: 60,
+          overlayOptions: () => {
+            const cols = process.stdout.columns || 100;
+            // Keep card compact and centered: max 94 columns on wide screens,
+            // while adapting responsively on smaller terminals.
+            const targetWidth = Math.max(56, Math.min(cols - 4, 94));
+            return {
+              anchor: "center",
+              width: targetWidth,
+              maxHeight: "85%",
+              minWidth: 56,
+            };
           },
         }
       );
@@ -116,7 +122,7 @@ export default function sddProfilesExtension(pi: any): void {
 
   // Main /sdd-profile command
   pi.registerCommand?.("sdd-profile", {
-    description: "Gestionar y alternar perfiles de modelos SDD y subagentes (/sdd-profile [apply|save|list|show|delete])",
+    description: "Gestionar y alternar perfiles de modelos SDD y subagentes (/sdd-profile [apply|save|list|show|rename|delete])",
     handler: async (args: string, ctx: UiContext) => {
       const manager = getManager(ctx);
       const boundCtx: UiContext = {
@@ -234,15 +240,33 @@ export default function sddProfilesExtension(pi: any): void {
           return result.message;
         }
 
+        case "rename": {
+          const newName = parts[2];
+          if (!targetName || !newName) {
+            const usage = "Uso: /sdd-profile rename <nombre-actual> <nuevo-nombre>";
+            ctx.ui?.notify?.(usage, "warning");
+            return usage;
+          }
+          const res = manager.renameProfile(targetName, newName);
+          ctx.ui?.notify?.(res.message, res.success ? "info" : "warning");
+          return res.message;
+        }
+
         case "delete": {
           if (!targetName) {
             ctx.ui?.notify?.("Uso: /sdd-profile delete <nombre>", "warning");
             return "Uso: /sdd-profile delete <nombre>";
           }
+          const profile = manager.getProfile(targetName);
+          if (!profile) {
+            const msg = `Perfil "${targetName}" no encontrado.`;
+            ctx.ui?.notify?.(msg, "warning");
+            return msg;
+          }
           const deleted = manager.deleteProfile(targetName);
           const msg = deleted
-            ? `Perfil "${targetName}" eliminado.`
-            : `No se pudo eliminar "${targetName}" (no existe o es un perfil predeterminado).`;
+            ? `Perfil "${targetName}" eliminado correctamente.`
+            : `No se pudo eliminar el perfil "${targetName}".`;
           ctx.ui?.notify?.(msg, deleted ? "info" : "warning");
           return msg;
         }
@@ -286,6 +310,51 @@ export default function sddProfilesExtension(pi: any): void {
       const profiles = manager.listProfiles();
       const active = manager.getActiveProfileName();
       return formatProfileList(profiles, active);
+    },
+  });
+
+  // Direct helper command: /sdd-profile-rename <actual> <nuevo>
+  pi.registerCommand?.("sdd-profile-rename", {
+    description: "Renombrar un perfil existente de modelos SDD",
+    handler: async (args: string, ctx: UiContext) => {
+      const manager = getManager(ctx);
+      const parts = (args || "").trim().split(/\s+/);
+      const oldName = parts[0];
+      const newName = parts[1];
+      if (!oldName || !newName) {
+        const usage = "Uso: /sdd-profile-rename <nombre-actual> <nuevo-nombre>";
+        ctx.ui?.notify?.(usage, "warning");
+        return usage;
+      }
+      const res = manager.renameProfile(oldName, newName);
+      ctx.ui?.notify?.(res.message, res.success ? "info" : "warning");
+      return res.message;
+    },
+  });
+
+  // Direct helper command: /sdd-profile-delete <nombre>
+  pi.registerCommand?.("sdd-profile-delete", {
+    description: "Eliminar un perfil de modelos SDD",
+    handler: async (args: string, ctx: UiContext) => {
+      const manager = getManager(ctx);
+      const target = (args || "").trim();
+      if (!target) {
+        const usage = "Uso: /sdd-profile-delete <nombre>";
+        ctx.ui?.notify?.(usage, "warning");
+        return usage;
+      }
+      const profile = manager.getProfile(target);
+      if (!profile) {
+        const msg = `Perfil "${target}" no encontrado.`;
+        ctx.ui?.notify?.(msg, "warning");
+        return msg;
+      }
+      const deleted = manager.deleteProfile(target);
+      const msg = deleted
+        ? `Perfil "${target}" eliminado correctamente.`
+        : `No se pudo eliminar el perfil "${target}".`;
+      ctx.ui?.notify?.(msg, deleted ? "info" : "warning");
+      return msg;
     },
   });
 
@@ -367,6 +436,100 @@ export default function sddProfilesExtension(pi: any): void {
                   success: res.success,
                   message: res.message,
                   active_profile: args.profile_name,
+                },
+                null,
+                2
+              ),
+            },
+          ],
+        };
+      },
+    });
+
+    pi.registerTool({
+      name: "sdd_profile_rename",
+      description: "Rename an existing SDD and subagent model profile.",
+      parameters: {
+        type: "object",
+        properties: {
+          old_name: {
+            type: "string",
+            description: "The current name of the profile to rename.",
+          },
+          new_name: {
+            type: "string",
+            description: "The new name for the profile.",
+          },
+        },
+        required: ["old_name", "new_name"],
+      },
+      execute: async (
+        _toolCallId: string,
+        args: { old_name: string; new_name: string },
+        _signal: any,
+        _onUpdate: any,
+        ctx: any
+      ) => {
+        const manager = getManager(ctx);
+        const res = manager.renameProfile(args.old_name, args.new_name);
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(res, null, 2),
+            },
+          ],
+        };
+      },
+    });
+
+    pi.registerTool({
+      name: "sdd_profile_delete",
+      description: "Delete an existing SDD and subagent model profile.",
+      parameters: {
+        type: "object",
+        properties: {
+          profile_name: {
+            type: "string",
+            description: "The name of the profile to delete.",
+          },
+        },
+        required: ["profile_name"],
+      },
+      execute: async (
+        _toolCallId: string,
+        args: { profile_name: string },
+        _signal: any,
+        _onUpdate: any,
+        ctx: any
+      ) => {
+        const manager = getManager(ctx);
+        const profile = manager.getProfile(args.profile_name);
+        if (!profile) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify(
+                  { success: false, message: `Perfil "${args.profile_name}" no encontrado.` },
+                  null,
+                  2
+                ),
+              },
+            ],
+          };
+        }
+        const deleted = manager.deleteProfile(args.profile_name);
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(
+                {
+                  success: deleted,
+                  message: deleted
+                    ? `Perfil "${args.profile_name}" eliminado.`
+                    : `No se pudo eliminar "${args.profile_name}".`,
                 },
                 null,
                 2

@@ -97,6 +97,14 @@ export function normalizeModalKey(data: string): string {
   if (matchesKey(data, Key.pageDown) || data === "\u001b[6~") {
     return "pagedown";
   }
+  if (
+    matchesKey(data, Key.delete) ||
+    data === "\u001b[3~" ||
+    data === "\u001b[3;5~" ||
+    data === "\u001b[3;2~"
+  ) {
+    return "delete";
+  }
   if (matchesKey(data, Key.backspace) || data === "\u007f" || data === "\b") {
     return "backspace";
   }

@@ -143,4 +143,30 @@ describe("manager module", () => {
       effort: "max",
     });
   });
+
+  it("should rename an existing profile via manager", () => {
+    manager.createProfile({
+      name: "custom-to-rename",
+      default_model: "custom/model",
+    });
+
+    const renameRes = manager.renameProfile("custom-to-rename", "custom-renamed");
+    expect(renameRes.success).toBe(true);
+    expect(renameRes.profile?.name).toBe("custom-renamed");
+    expect(manager.getProfile("custom-to-rename")).toBeNull();
+    expect(manager.getProfile("custom-renamed")).toBeDefined();
+  });
+
+  it("should delete profile via manager and report status", () => {
+    manager.createProfile({
+      name: "custom-to-delete",
+      default_model: "custom/model",
+    });
+
+    expect(manager.deleteProfile("custom-to-delete")).toBe(true);
+    expect(manager.getProfile("custom-to-delete")).toBeNull();
+    // cinlo-flash is builtin in this test and should also be deletable
+    expect(manager.deleteProfile("cinlo-flash")).toBe(true);
+    expect(manager.getProfile("cinlo-flash")).toBeNull();
+  });
 });
