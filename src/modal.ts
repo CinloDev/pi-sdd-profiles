@@ -32,8 +32,8 @@ export const ASSIGN_ALL_SUBAGENTS_KEY = "⚡ [Asignar un mismo modelo a TODOS lo
 export const ASSIGN_ALL_EFFORT_KEY = "🧠 [Asignar un mismo nivel de esfuerzo a TODOS los subagentes...]";
 export const ASSIGN_CATEGORY_KEY = "📦 [Asignar modelo por Categoría...]";
 
-export const EFFORT_OPTIONS: Array<ReasoningEffort | "heredar"> = [
-  "heredar",
+export const EFFORT_OPTIONS: Array<ReasoningEffort | "default"> = [
+  "default",
   "off",
   "minimal",
   "low",
@@ -399,12 +399,15 @@ export function createSddProfilesModal(input: ModalInput) {
     const cSuccess = (t: string) => (theme?.fg ? theme.fg("success", t) : t);
     const cDim = (t: string) => (theme?.fg ? theme.fg("dim", t) : t);
 
+    const isOrchestrator =
+      pickerTarget === "default-model" || selectedAgent() === ORCHESTRATOR_AGENT_KEY;
+
     const titleTarget =
       pickerTarget === "all-models"
         ? "TODOS los subagentes"
         : pickerTarget === "category-models"
           ? `Categoría: ${targetCategory}`
-          : pickerTarget === "default-model" || selectedAgent() === ORCHESTRATOR_AGENT_KEY
+          : isOrchestrator
             ? "👑 Orquestador (Sesión Principal)"
             : `Agente: ${selectedAgent()}`;
 
@@ -429,8 +432,10 @@ export function createSddProfilesModal(input: ModalInput) {
               ? cDim(" (rápido y económico)")
               : item === "max"
                 ? cDim(" (máxima profundidad)")
-                : item === "heredar"
-                  ? cDim(" (heredar por defecto)")
+                : item === "default"
+                  ? isOrchestrator
+                    ? cDim(" (predeterminado del proveedor / sin forzar)")
+                    : cDim(" (heredar por defecto del perfil)")
                   : "";
       listLines.push(`${cursor}${isSelected ? cAccent(item) : item}${desc}`);
     }
@@ -663,27 +668,45 @@ export function createSddProfilesModal(input: ModalInput) {
           const chosen = EFFORT_OPTIONS[pickerIndex];
           if (editingProfile) {
             isDirty = true;
-            const effortVal = chosen === "heredar" ? undefined : chosen;
+            const effortVal = chosen === "default" ? undefined : chosen;
 
             if (pickerTarget === "default-model" || selectedAgent() === ORCHESTRATOR_AGENT_KEY) {
               if (stagedModel) editingProfile.default_model = stagedModel;
-              editingProfile.default_effort = effortVal;
+              if (effortVal !== undefined) {
+                editingProfile.default_effort = effortVal;
+              } else {
+                delete editingProfile.default_effort;
+              }
             } else if (pickerTarget === "all-models") {
               if (stagedModel) editingProfile.default_model = stagedModel;
               for (const ag of ALL_KNOWN_AGENTS) {
-                editingProfile.model_profiles[ag] = {
-                  model: stagedModel ?? editingProfile.model_profiles[ag]?.model ?? editingProfile.default_model ?? "default",
-                  effort: effortVal,
-                };
+                const entryModel = stagedModel ?? editingProfile.model_profiles[ag]?.model ?? editingProfile.default_model ?? "default";
+                if (effortVal !== undefined) {
+                  editingProfile.model_profiles[ag] = {
+                    model: entryModel,
+                    effort: effortVal,
+                  };
+                } else {
+                  editingProfile.model_profiles[ag] = {
+                    model: entryModel,
+                  };
+                }
               }
             } else if (pickerTarget === "category-models" && targetCategory) {
               const cat = SDD_AGENT_CATEGORIES.find((c) => c.name === targetCategory);
               if (cat) {
                 for (const ag of cat.agents) {
-                  editingProfile.model_profiles[ag] = {
-                    model: stagedModel ?? editingProfile.model_profiles[ag]?.model ?? editingProfile.default_model ?? "default",
-                    effort: effortVal,
-                  };
+                  const entryModel = stagedModel ?? editingProfile.model_profiles[ag]?.model ?? editingProfile.default_model ?? "default";
+                  if (effortVal !== undefined) {
+                    editingProfile.model_profiles[ag] = {
+                      model: entryModel,
+                      effort: effortVal,
+                    };
+                  } else {
+                    editingProfile.model_profiles[ag] = {
+                      model: entryModel,
+                    };
+                  }
                 }
               }
             } else {
@@ -693,10 +716,16 @@ export function createSddProfilesModal(input: ModalInput) {
                 editingProfile.model_profiles[currentAgent]?.model ??
                 editingProfile.default_model ??
                 "default";
-              editingProfile.model_profiles[currentAgent] = {
-                model: currentModel,
-                effort: effortVal,
-              };
+              if (effortVal !== undefined) {
+                editingProfile.model_profiles[currentAgent] = {
+                  model: currentModel,
+                  effort: effortVal,
+                };
+              } else {
+                editingProfile.model_profiles[currentAgent] = {
+                  model: currentModel,
+                };
+              }
             }
           }
           stagedModel = undefined;

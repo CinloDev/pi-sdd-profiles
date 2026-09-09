@@ -363,4 +363,33 @@ describe("modal overlay component", () => {
     modal.handleInput("\r");
     expect(mockManager.renameProfile).toHaveBeenCalledWith("deep-reasoning", "deep-reasoning");
   });
+
+  it("should display contextualized default effort and clear default_effort when default is chosen", () => {
+    const done = vi.fn();
+    const modal = createSddProfilesModal({
+      manager: mockManager,
+      availableModels,
+      done,
+    });
+
+    // Press 'e' on 'cin' (which has default_effort: "high")
+    modal.handleInput("e");
+    // Press 'm' to open model picker for orchestrator
+    modal.handleInput("m");
+    // Select first model (google/gemini-2.5-flash) with enter -> opens effort picker
+    modal.handleInput("\r");
+
+    let lines = modal.render(80);
+    let content = lines.join("\n");
+    expect(content).toContain("predeterminado del proveedor / sin forzar");
+
+    // Index 0 in EFFORT_OPTIONS is "default"
+    // Press enter to choose "default"
+    modal.handleInput("\r");
+
+    // Back in editor: orchestrator should now have no explicit effort
+    lines = modal.render(80);
+    content = lines.join("\n");
+    expect(content).toContain("Orquestador");
+  });
 });

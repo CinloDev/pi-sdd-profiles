@@ -9,6 +9,7 @@ import {
 } from "./src/ui.js";
 import { createSddProfilesModal } from "./src/modal.js";
 import { resolveAvailableModels } from "./src/models-resolver.js";
+import { parseReasoningEffort, type ReasoningEffort } from "./src/types.js";
 
 export { SddProfileManager } from "./src/manager.js";
 export * from "./src/types.js";
@@ -201,12 +202,21 @@ export default function sddProfilesExtension(pi: any): void {
             return runInteractiveProfileCreate(manager, ctx);
           }
           const defaultModel = parts[2];
-          const effort = parts[3] as any;
+          const rawEffort = parts[3];
           const isProject = parts.includes("--project");
+          let parsedEffort: ReasoningEffort | undefined;
+          if (rawEffort && rawEffort !== "--project") {
+            try {
+              parsedEffort = parseReasoningEffort(rawEffort);
+            } catch (err: any) {
+              ctx.ui?.notify?.(err.message, "error");
+              return err.message;
+            }
+          }
           const result = manager.createProfile({
             name: targetName,
             default_model: defaultModel && defaultModel !== "--project" ? defaultModel : undefined,
-            default_effort: effort && effort !== "--project" ? effort : undefined,
+            default_effort: parsedEffort,
             scope: isProject ? "project" : "global",
           });
           ctx.ui?.notify?.(result.message, result.success ? "info" : "error");
@@ -224,17 +234,26 @@ export default function sddProfilesExtension(pi: any): void {
         case "set": {
           const agentName = parts[2];
           const modelName = parts[3];
-          const effort = parts[4] as any;
+          const rawEffort = parts[4];
           if (!targetName || !agentName || !modelName) {
             const msg = "Uso: /sdd-profile set <perfil> <agente> <modelo> [effort]";
             ctx.ui?.notify?.(msg, "warning");
             return msg;
           }
+          let parsedEffort: ReasoningEffort | undefined;
+          if (rawEffort !== undefined) {
+            try {
+              parsedEffort = parseReasoningEffort(rawEffort);
+            } catch (err: any) {
+              ctx.ui?.notify?.(err.message, "error");
+              return err.message;
+            }
+          }
           const result = manager.setAgentInProfile({
             profileName: targetName,
             agentName,
             model: modelName,
-            effort,
+            effort: parsedEffort,
           });
           ctx.ui?.notify?.(result.message, result.success ? "info" : "error");
           return result.message;

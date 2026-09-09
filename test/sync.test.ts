@@ -49,6 +49,23 @@ describe("sync module", () => {
     expect(updated.model_profiles).toEqual(sampleProfile.model_profiles);
   });
 
+  it("should delete default_effort when profile.default_effort is undefined", () => {
+    const profileWithoutEffort: Profile = {
+      name: "unconstrained-profile",
+      default_model: "test/unconstrained",
+      default_effort: undefined,
+      model_profiles: {
+        "sdd-explore": { model: "test/unconstrained" },
+      },
+    };
+
+    const updated = applyProfileToConfig(sampleConfig, profileWithoutEffort);
+    expect(updated.default_effort).toBeUndefined();
+    expect("default_effort" in updated).toBe(false);
+    expect(updated.model_profiles?.["sdd-explore"]).toEqual({ model: "test/unconstrained" });
+    expect("effort" in (updated.model_profiles?.["sdd-explore"] as any)).toBe(false);
+  });
+
   it("should extract a valid profile from an existing config", () => {
     const extracted = extractProfileFromConfig(sampleConfig, "my-saved-profile", "Extracted from current config");
 
