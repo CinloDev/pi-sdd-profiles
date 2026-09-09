@@ -27,6 +27,12 @@ export default function sddProfilesExtension(pi: any): void {
   const syncActiveProfileToRuntime = async (profile?: any, ctx?: any): Promise<void> => {
     if (!profile) return;
 
+    // Inside a gentle-pi subagent child process the launcher passes an explicit
+    // --model (per-agent routing from model_profiles). Re-applying the active
+    // profile's session default here would override that model right after
+    // launch, so the runtime sync only applies to the main session.
+    if (process.env.GENTLE_PI_AGENTS_CHILD === "1") return;
+
     // 1. Update footer status indicator
     if (ctx?.hasUI && typeof ctx?.ui?.setStatus === "function") {
       ctx.ui.setStatus("sdd-profile", `🎛️ [${profile.name}]`);
