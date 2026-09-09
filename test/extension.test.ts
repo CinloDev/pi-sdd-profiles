@@ -28,8 +28,9 @@ describe("extension entrypoint", () => {
     expect(mockPi.registerCommand).toHaveBeenCalledWith("sdd-profile-rename", expect.any(Object));
     expect(mockPi.registerCommand).toHaveBeenCalledWith("sdd-profile-delete", expect.any(Object));
 
-    // Shortcut registered
+    // Shortcuts registered (both alt+m and ctrl+shift+m for universal/macOS support)
     expect(mockPi.registerShortcut).toHaveBeenCalledWith("alt+m", expect.any(Object));
+    expect(mockPi.registerShortcut).toHaveBeenCalledWith("ctrl+shift+m", expect.any(Object));
 
     // Tools registered
     expect(mockPi.registerTool).toHaveBeenCalledWith(expect.objectContaining({ name: "sdd_profile_list" }));

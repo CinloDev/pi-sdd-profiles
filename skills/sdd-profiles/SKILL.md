@@ -60,7 +60,7 @@ Profiles are loaded with hierarchical precedence:
 
 | Command | Description |
 |---|---|
-| `/sdd-profile` | Opens interactive UI selector (or use shortcut `alt+m`). |
+| `/sdd-profile` | Opens interactive UI selector (or use shortcut `alt+m` / `ctrl+shift+m`). |
 | `/sdd-profile list` | Lists available profiles and shows which is currently active. |
 | `/sdd-profile apply <name> [--project]` | Activates a profile by name. |
 | `/sdd-profile create <name> [model] [effort] [--project]` | Creates a new profile. If arguments are omitted, launches the interactive wizard. |

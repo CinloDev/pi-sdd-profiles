@@ -377,19 +377,28 @@ export default function sddProfilesExtension(pi: any): void {
     },
   });
 
-  // Keyboard shortcut to open interactive selector (alt+m avoids conflict with Pi core alt+p model cycling and gentle-agents alt+s)
+  // Keyboard shortcuts to open interactive selector
+  // - alt+m: standard for Linux/Windows and macOS with Option as Meta key enabled
+  // - ctrl+shift+m: universal shortcut (avoids 'µ' character issue on macOS terminal emulators)
+  const openModalHandler = async (ctx: UiContext) => {
+    const manager = getManager(ctx);
+    const boundCtx: UiContext = {
+      ...ctx,
+      onProfileActivated: async (p) => {
+        await syncActiveProfileToRuntime(p, ctx);
+      },
+    };
+    await openProfilesModalOrFallback(manager, boundCtx);
+  };
+
   pi.registerShortcut?.("alt+m", {
     description: "Abrir ventana flotante de perfiles SDD",
-    handler: async (ctx: UiContext) => {
-      const manager = getManager(ctx);
-      const boundCtx: UiContext = {
-        ...ctx,
-        onProfileActivated: async (p) => {
-          await syncActiveProfileToRuntime(p, ctx);
-        },
-      };
-      await openProfilesModalOrFallback(manager, boundCtx);
-    },
+    handler: openModalHandler,
+  });
+
+  pi.registerShortcut?.("ctrl+shift+m", {
+    description: "Abrir ventana flotante de perfiles SDD (alternativa macOS/universal)",
+    handler: openModalHandler,
   });
 
   // Tool registration for LLM / Orchestrator when programmatic switching is needed
