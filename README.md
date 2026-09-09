@@ -12,7 +12,7 @@ Se integra de forma transparente y atómica con [`pi-subagents-j0k3r`](https://g
 
 ## Características
 
-- 🪟 **Ventana Flotante Modal Interactiva**: Se abre centrada en la terminal (`alt+m` o `/sdd-profile`) sin borrar el historial ni salir del contexto.
+- 🪟 **Ventana Flotante Modal Interactiva**: Se abre centrada en la terminal (`alt+m`, `ctrl+shift+m` o `/sdd-profile`) sin borrar el historial ni salir del contexto.
 - ⚡ **Cambio en caliente**: Alterná perfiles y sincronizá el modelo de sesión y los subagentes al instante.
 - 📦 **Perfiles Estándar Incluidos**:
   - `balanced-default`: Equilibrio entre calidad y costo con Claude Sonnet 4.5 y Claude Haiku 4.5.
@@ -27,7 +27,7 @@ Se integra de forma transparente y atómica con [`pi-subagents-j0k3r`](https://g
 
 ---
 
-## Controles en la Ventana Flotante (`alt+m`)
+## Controles en la Ventana Flotante (`alt+m` / `ctrl+shift+m`)
 
 ### Vista Principal (Lista de Perfiles)
 - `↑` / `↓` o `j` / `k`: Moverse entre los perfiles disponibles.
@@ -81,8 +81,14 @@ Al asignar un modelo a cualquier agente o categoría, se abre la lista flotante 
 | `/sdd-profile rename <nombre> <nuevo>` | Renombra un perfil personalizado existente y actualiza el puntero activo si estaba seleccionado. |
 | `/sdd-profile delete <nombre>` | Elimina un perfil personalizado creado por el usuario. |
 
-### Atajo de teclado
-- `alt+m`: Abre de inmediato el menú selector de perfiles.
+### Atajos de teclado
+- `Alt + M` o `Ctrl + Shift + M`: Abre de inmediato el menú selector de perfiles.
+- `/sdd-profile`: Comando equivalente para abrir la interfaz desde cualquier entorno o terminal.
+
+> 💡 **Nota para usuarios de macOS:**
+> En macOS, por defecto terminales como Terminal.app o iTerm2 utilizan la tecla `Option` para componer caracteres tipográficos especiales (por ejemplo, `Option + M` emite el caracter `µ`).
+> - Podés usar directamente **`Ctrl + Shift + M`** o el comando `/sdd-profile` sin configurar nada adicional.
+> - Si preferís usar `Option + M`, activá *"Use Option as Meta key"* en las preferencias de tu terminal (*Terminal.app: Settings → Profiles → Keyboard → Use Option as Meta key*; *iTerm2: Settings → Profiles → Keys → Left Option Key: Esc+*).
 
 ---
 

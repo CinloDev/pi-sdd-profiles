@@ -113,8 +113,9 @@ pi-sdd-profiles/
 Cualquier funcionalidad nueva, ajuste en atajos o corrección de bugs debe acompañarse de su correspondiente test en `test/`. Priorizamos tests rápidos y determinísticos sin dependencias externas de red.
 
 ### 2. Atajos de Teclado y Compatibilidad
-El atajo por defecto para abrir la ventana modal es **`Alt + M`** (Model / Modal). 
+Los atajos registrados para abrir la ventana modal son **`Alt + M`** y **`Ctrl + Shift + M`** (Model / Modal). 
 - **Regla**: Nunca agregues un atajo por defecto que colisione con atajos nativos de Pi (como `Alt+P` en Windows/WSL) o de paquetes estándar como Gentle Pi (`Alt+S`, `Alt+A`, `Alt+G`).
+- **Compatibilidad macOS**: En macOS, la combinación `Option + M` genera el caracter `µ` en terminales donde la tecla Option no está configurada como Meta. Por esta razón se registra en paralelo `Ctrl + Shift + M` como atajo universal out-of-the-box.
 
 ### 3. Experiencia en Terminal (TUI) y Fallbacks
 - El modal interactivo se renderiza en una sola vista flotante limpia sobre la terminal.
