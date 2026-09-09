@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import type { Profile, SubagentsConfigFile } from "./types.js";
+import { parseReasoningEffort, type Profile, type ReasoningEffort, type SubagentsConfigFile } from "./types.js";
 
 /**
  * Pure function: applies profile models and defaults onto a SubagentsConfigFile object,
@@ -17,10 +17,26 @@ export function applyProfileToConfig(
   }
   if (profile.default_effort) {
     nextConfig.default_effort = profile.default_effort;
+  } else {
+    delete nextConfig.default_effort;
   }
 
   nextConfig.active_profile = profile.name;
-  nextConfig.model_profiles = { ...profile.model_profiles };
+
+  const cleanedModelProfiles: Record<string, { model: string; effort?: string }> = {};
+  for (const [agentKey, entry] of Object.entries(profile.model_profiles ?? {})) {
+    if (entry && entry.effort) {
+      cleanedModelProfiles[agentKey] = {
+        model: entry.model,
+        effort: entry.effort,
+      };
+    } else if (entry) {
+      cleanedModelProfiles[agentKey] = {
+        model: entry.model,
+      };
+    }
+  }
+  nextConfig.model_profiles = cleanedModelProfiles;
 
   return nextConfig;
 }
@@ -34,12 +50,27 @@ export function extractProfileFromConfig(
   description?: string
 ): Profile {
   const now = new Date().toISOString();
+  const parsedDefaultEffort = parseReasoningEffort(config.default_effort, false);
+  const parsedModelProfiles: Record<string, { model: string; effort?: ReasoningEffort }> = {};
+
+  if (config.model_profiles && typeof config.model_profiles === "object") {
+    for (const [agent, entry] of Object.entries(config.model_profiles)) {
+      if (entry && typeof entry === "object" && "model" in entry) {
+        const effort = parseReasoningEffort(entry.effort, false);
+        parsedModelProfiles[agent] = {
+          model: String(entry.model),
+          ...(effort ? { effort } : {}),
+        };
+      }
+    }
+  }
+
   return {
     name,
     description: description ?? `Saved from subagents config at ${now}`,
     default_model: typeof config.default_model === "string" ? config.default_model : undefined,
-    default_effort: typeof config.default_effort === "string" ? (config.default_effort as any) : undefined,
-    model_profiles: (config.model_profiles as any) ?? {},
+    default_effort: parsedDefaultEffort,
+    model_profiles: parsedModelProfiles,
     created_at: now,
     updated_at: now,
   };

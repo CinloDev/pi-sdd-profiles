@@ -160,10 +160,17 @@ export class SddProfileManager {
     }
 
     const updatedProfiles = { ...profile.model_profiles };
-    updatedProfiles[params.agentName.trim()] = {
-      model: params.model.trim(),
-      effort: params.effort,
-    };
+    const agentKey = params.agentName.trim();
+    if (params.effort) {
+      updatedProfiles[agentKey] = {
+        model: params.model.trim(),
+        effort: params.effort,
+      };
+    } else {
+      updatedProfiles[agentKey] = {
+        model: params.model.trim(),
+      };
+    }
 
     const updatedProfile: Profile = {
       ...profile,

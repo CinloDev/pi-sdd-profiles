@@ -185,4 +185,43 @@ describe("ui formatting module", () => {
     expect(res).toContain('Perfil "custom-p" eliminado.');
     expect(mockManager.deleteProfile).toHaveBeenCalledWith("custom-p");
   });
+
+  it("should reset default_effort when default/heredar is chosen in interactive edit", async () => {
+    const mockProfile: Profile = {
+      name: "edit-effort",
+      default_model: "test/model",
+      default_effort: "high",
+      model_profiles: {},
+    };
+
+    const mockManager = {
+      getProfile: vi.fn(() => ({ ...mockProfile })),
+      createProfile: vi.fn(() => ({ success: true, message: "Saved" })),
+    };
+
+    const mockCtx = {
+      ui: {
+        select: vi
+          .fn()
+          .mockResolvedValueOnce("🧠 Cambiar esfuerzo por defecto [high]")
+          .mockResolvedValueOnce("default (heredar / sin forzar)")
+          .mockResolvedValueOnce("💾 Guardar y Salir"),
+        notify: vi.fn(),
+      },
+    };
+
+    const res = await (await import("../src/ui.js")).runInteractiveProfileEdit(
+      mockManager as any,
+      mockCtx as any,
+      "edit-effort"
+    );
+
+    expect(res).toBe("Saved");
+    expect(mockManager.createProfile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: "edit-effort",
+        default_effort: undefined,
+      })
+    );
+  });
 });

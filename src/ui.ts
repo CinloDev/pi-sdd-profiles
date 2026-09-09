@@ -53,17 +53,33 @@ export async function promptModelSelection(
 
 /**
  * Prompts user to select a reasoning effort level.
+ * Returns:
+ * - A valid ReasoningEffort if chosen
+ * - "default" if user explicitly chose default/heredar
+ * - undefined if user cancelled the selection dialog (Esc)
  */
 export async function promptEffortSelection(
   ctx: UiContext,
   title: string,
   currentEffort?: ReasoningEffort
-): Promise<ReasoningEffort | undefined> {
-  if (!ctx.ui?.select) return currentEffort;
+): Promise<ReasoningEffort | "default" | undefined> {
+  if (!ctx.ui?.select) return currentEffort ?? "default";
 
-  const options = ["medium", "high", "max", "low", "minimal", "off", "heredar (por defecto)"];
+  const options = [
+    "default (heredar / sin forzar)",
+    "off",
+    "minimal",
+    "low",
+    "medium",
+    "high",
+    "xhigh",
+    "max",
+  ];
   const selected = await ctx.ui.select(title, options);
-  if (!selected || selected.startsWith("heredar")) return undefined;
+  if (!selected) return undefined;
+  if (selected.startsWith("default") || selected.startsWith("heredar")) {
+    return "default";
+  }
   return selected as ReasoningEffort;
 }
 
@@ -206,8 +222,12 @@ export async function runInteractiveProfileEdit(
 
     if (action.startsWith("🧠 Cambiar esfuerzo por defecto")) {
       const selectedEffort = await promptEffortSelection(ctx, "Seleccionar Esfuerzo de Razonamiento:", currentProfile.default_effort);
-      if (selectedEffort) {
+      if (selectedEffort === "default") {
+        delete currentProfile.default_effort;
+        ctx.ui?.notify?.("Esfuerzo por defecto restablecido a default del proveedor.", "info");
+      } else if (selectedEffort) {
         currentProfile.default_effort = selectedEffort;
+        ctx.ui?.notify?.(`Esfuerzo por defecto cambiado a ${selectedEffort}.`, "info");
       }
       continue;
     }
@@ -216,10 +236,14 @@ export async function runInteractiveProfileEdit(
       const model = await promptModelSelection(ctx, "Elegir modelo para asignar a TODOS los agentes:");
       if (!model) continue;
 
-      const effort = await promptEffortSelection(ctx, `Esfuerzo para todos los agentes con ${model}:`);
+      const effortRes = await promptEffortSelection(ctx, `Esfuerzo para todos los agentes con ${model}:`);
+      const effort = effortRes === "default" ? undefined : effortRes;
 
       for (const agent of ALL_KNOWN_AGENTS) {
-        currentProfile.model_profiles[agent] = { model, effort };
+        currentProfile.model_profiles[agent] = {
+          model,
+          ...(effort ? { effort } : {}),
+        };
       }
       ctx.ui?.notify?.(`Modelo ${model} asignado a todos los ${ALL_KNOWN_AGENTS.length} agentes.`, "info");
       continue;
@@ -245,16 +269,19 @@ export async function runInteractiveProfileEdit(
 
         if (jdSubChoice?.includes("Arbitraje Cruzado")) {
           const modelA = await promptModelSelection(ctx, "Elegir modelo para Juez A (jd-judge-a):");
-          const effortA = await promptEffortSelection(ctx, "Esfuerzo para Juez A:");
-          if (modelA) currentProfile.model_profiles["jd-judge-a"] = { model: modelA, effort: effortA };
+          const effortResA = await promptEffortSelection(ctx, "Esfuerzo para Juez A:");
+          const effortA = effortResA === "default" ? undefined : effortResA;
+          if (modelA) currentProfile.model_profiles["jd-judge-a"] = { model: modelA, ...(effortA ? { effort: effortA } : {}) };
 
           const modelB = await promptModelSelection(ctx, "Elegir modelo para Juez B (jd-judge-b):");
-          const effortB = await promptEffortSelection(ctx, "Esfuerzo para Juez B:");
-          if (modelB) currentProfile.model_profiles["jd-judge-b"] = { model: modelB, effort: effortB };
+          const effortResB = await promptEffortSelection(ctx, "Esfuerzo para Juez B:");
+          const effortB = effortResB === "default" ? undefined : effortResB;
+          if (modelB) currentProfile.model_profiles["jd-judge-b"] = { model: modelB, ...(effortB ? { effort: effortB } : {}) };
 
           const modelFix = await promptModelSelection(ctx, "Elegir modelo para Fix Agent (jd-fix-agent):");
-          const effortFix = await promptEffortSelection(ctx, "Esfuerzo para Fix Agent:");
-          if (modelFix) currentProfile.model_profiles["jd-fix-agent"] = { model: modelFix, effort: effortFix };
+          const effortResFix = await promptEffortSelection(ctx, "Esfuerzo para Fix Agent:");
+          const effortFix = effortResFix === "default" ? undefined : effortResFix;
+          if (modelFix) currentProfile.model_profiles["jd-fix-agent"] = { model: modelFix, ...(effortFix ? { effort: effortFix } : {}) };
 
           ctx.ui?.notify?.("Arbitraje cruzado de Judgment Day configurado.", "info");
           continue;
@@ -264,10 +291,14 @@ export async function runInteractiveProfileEdit(
       const model = await promptModelSelection(ctx, `Elegir modelo para ${cat.name}:`);
       if (!model) continue;
 
-      const effort = await promptEffortSelection(ctx, `Esfuerzo para ${cat.name}:`);
+      const effortRes = await promptEffortSelection(ctx, `Esfuerzo para ${cat.name}:`);
+      const effort = effortRes === "default" ? undefined : effortRes;
 
       for (const agent of cat.agents) {
-        currentProfile.model_profiles[agent] = { model, effort };
+        currentProfile.model_profiles[agent] = {
+          model,
+          ...(effort ? { effort } : {}),
+        };
       }
       ctx.ui?.notify?.(`Categoría "${cat.name}" actualizada con ${model}.`, "info");
       continue;
@@ -292,9 +323,20 @@ export async function runInteractiveProfileEdit(
       const model = await promptModelSelection(ctx, `Elegir modelo para ${agentName}:`, current?.model);
       if (!model) continue;
 
-      const effort = await promptEffortSelection(ctx, `Esfuerzo para ${agentName}:`, current?.effort);
+      const effortRes = await promptEffortSelection(ctx, `Esfuerzo para ${agentName}:`, current?.effort);
+      let effort: ReasoningEffort | undefined;
+      if (effortRes === "default") {
+        effort = undefined;
+      } else if (effortRes !== undefined) {
+        effort = effortRes;
+      } else {
+        effort = current?.effort;
+      }
 
-      currentProfile.model_profiles[agentName] = { model, effort };
+      currentProfile.model_profiles[agentName] = {
+        model,
+        ...(effort ? { effort } : {}),
+      };
       ctx.ui?.notify?.(`Agente "${agentName}" asignado a ${model}.`, "info");
       continue;
     }
@@ -330,7 +372,8 @@ export async function runInteractiveProfileCreate(
     return undefined;
   }
 
-  const defaultEffort = await promptEffortSelection(ctx, "Esfuerzo de razonamiento por defecto:");
+  const defaultEffortRes = await promptEffortSelection(ctx, "Esfuerzo de razonamiento por defecto:");
+  const defaultEffort = defaultEffortRes === "default" ? undefined : defaultEffortRes;
 
   const modelProfiles: Record<string, ModelProfileEntry> = {};
 
@@ -344,7 +387,10 @@ export async function runInteractiveProfileCreate(
 
   if (strategy?.startsWith("🚀 Aplicar")) {
     for (const agent of ALL_KNOWN_AGENTS) {
-      modelProfiles[agent] = { model: defaultModel, effort: defaultEffort };
+      modelProfiles[agent] = {
+        model: defaultModel,
+        ...(defaultEffort ? { effort: defaultEffort } : {}),
+      };
     }
   } else if (strategy?.startsWith("🎯 Configurar por Categoría") || strategy?.startsWith("🔍 Personalizar")) {
     // Create draft profile and open full editor
