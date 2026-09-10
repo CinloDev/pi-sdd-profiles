@@ -169,4 +169,26 @@ describe("manager module", () => {
     expect(manager.deleteProfile("cinlo-flash")).toBe(true);
     expect(manager.getProfile("cinlo-flash")).toBeNull();
   });
+
+  it("should reaffirm active profile assignments when overwritten externally", () => {
+    // 1. Activate profile
+    manager.activateProfile("cinlo-flash", "global");
+    let diskConfig = JSON.parse(fs.readFileSync(globalSubagentsPath, "utf-8"));
+    expect(diskConfig.model_profiles["sdd-apply"].model).toBe("cpamc/cinlo/gemini-3.8-flash-high");
+
+    // 2. External overwrite (e.g. gentle-pi session_start writes its own routing)
+    diskConfig.model_profiles["sdd-apply"] = { model: "gentle-pi-overwritten", effort: "low" };
+    fs.writeFileSync(globalSubagentsPath, JSON.stringify(diskConfig, null, 2), "utf-8");
+
+    // 3. Reaffirm restores the assignments
+    const reaffirmRes = manager.reaffirmActiveProfile("global");
+    expect(reaffirmRes.globalUpdated).toBe(true);
+
+    const restoredConfig = JSON.parse(fs.readFileSync(globalSubagentsPath, "utf-8"));
+    expect(restoredConfig.model_profiles["sdd-apply"].model).toBe("cpamc/cinlo/gemini-3.8-flash-high");
+
+    // 4. Second reaffirm is a no-op because it is already synchronized
+    const secondReaffirm = manager.reaffirmActiveProfile("global");
+    expect(secondReaffirm.globalUpdated).toBe(false);
+  });
 });

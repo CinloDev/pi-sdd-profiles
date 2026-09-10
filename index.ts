@@ -1,4 +1,5 @@
 import { SddProfileManager } from "./src/manager.js";
+import { SubagentsConfigWatcher } from "./src/watcher.js";
 import {
   formatProfileDetail,
   formatProfileList,
@@ -12,6 +13,7 @@ import { resolveAvailableModels } from "./src/models-resolver.js";
 import { parseReasoningEffort, type ReasoningEffort } from "./src/types.js";
 
 export { SddProfileManager } from "./src/manager.js";
+export { SubagentsConfigWatcher } from "./src/watcher.js";
 export * from "./src/types.js";
 export * from "./src/catalog.js";
 
@@ -75,16 +77,66 @@ export default function sddProfilesExtension(pi: any): void {
     }
   };
 
-  // Ensure footer status and session model match active profile on start
+  let activeWatcher: SubagentsConfigWatcher | null = null;
+
+  const stopWatcher = () => {
+    if (activeWatcher) {
+      try {
+        activeWatcher.stop();
+      } catch {}
+      activeWatcher = null;
+    }
+  };
+
+  // Ensure footer status, session model and subagents.json match active profile on start
   pi.on?.("session_start", async (_event: any, ctx: any) => {
+    if (process.env.GENTLE_PI_AGENTS_CHILD === "1") return;
+
     const manager = getManager(ctx);
     const active = manager.getActiveProfileName();
+
     if (active) {
       const profile = manager.getProfile(active);
       if (profile) {
+        // Reaffirm disk files first in case an external tool (like gentle-pi)
+        // or a previous session wrote over model_profiles.
+        try {
+          manager.reaffirmActiveProfile("both");
+        } catch (err) {
+          console.warn("[sdd-profiles] Error reaffirming active profile on session_start:", err);
+        }
+
         await syncActiveProfileToRuntime(profile, ctx);
       }
     }
+
+    // Start background watcher to safeguard subagents.json against external overwrites during the session
+    stopWatcher();
+    try {
+      activeWatcher = new SubagentsConfigWatcher({
+        manager,
+        debounceMs: 200,
+        onReconciled: (event) => {
+          if (ctx?.hasUI && typeof ctx?.ui?.notify === "function") {
+            ctx.ui.notify(
+              `Perfil SDD [${event.profile.name}] re-afirmado en ${event.scope} subagents.json tras modificación externa.`,
+              "info"
+            );
+          }
+        },
+      });
+      activeWatcher.start();
+    } catch (err) {
+      console.warn("[sdd-profiles] Could not start subagents.json watcher:", err);
+    }
+  });
+
+  pi.on?.("session_shutdown", (_event: any, _ctx: any) => {
+    stopWatcher();
+  });
+
+  pi.on?.("session_end", (_event: any, _ctx: any) => {
+    stopWatcher();
   });
 
   const openProfilesModalOrFallback = async (manager: SddProfileManager, boundCtx: UiContext) => {

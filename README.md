@@ -20,7 +20,7 @@ Se integra de forma transparente y atómica con [`pi-subagents-j0k3r`](https://g
   - `speed-economy`: Velocidad y costo mínimo para tareas ligeras e iteraciones directas.
 - 🎨 **Cockpit Visual y Editor en Pantalla**: Navegá con flechas (`↑`/`↓`), activá con `Enter`, editá con `e`, asigná modelos por lote con `a` o `c`, y guardá con `s`.
 - 📋 **Descubrimiento Automático de Modelos**: Despliega todos los modelos configurados en tu Pi (`cpamc/...`, `opencode-go/...`, locales o remotos) sin escribir nada a mano.
-- 🛡️ **Escritura Atómica Segura**: Preserva 100% de la configuración de `subagents.json` (`timeout_ms`, `history_panel_shortcut`, `default_tools`, etc.) y previene escrituras corruptas vía archivos temporales y renombrado atómico.
+- 🛡️ **Escritura Atómica y Protección de Perfil Activo**: Preserva 100% de la configuración de `subagents.json` (`timeout_ms`, `history_panel_shortcut`, `default_tools`, etc.) mediante renombrado atómico. Si una herramienta externa (como `gentle-pi` al arrancar o recargar sesión) pisa `model_profiles`, el plugin detecta la divergencia y re-afirma automáticamente las asignaciones del perfil activo sin bucles ni sobreescrituras innecesarias.
 - 🌐 **Soporte Global y por Proyecto**: Tus perfiles personalizados se guardan localmente en `~/.pi/agent/profiles/` (globales) o en `.pi/profiles/` (del proyecto).
 - 🧠 **Skill Incluida**: Provee la skill `sdd-profiles` para que el orquestador y los agentes sepan gobernar y sugerir perfiles.
 - 🤖 **Herramientas para el Orquestador**: Expone `sdd_profile_list`, `sdd_profile_switch`, `sdd_profile_rename` y `sdd_profile_delete` como tools para que el orquestador pueda conmutar o administrar perfiles programáticamente.
