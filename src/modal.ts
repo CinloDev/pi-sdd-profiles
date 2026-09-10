@@ -199,7 +199,7 @@ export function createSddProfilesModal(input: ModalInput) {
         const agentCount = cDim(` · ${p.agent_count} subagentes`);
 
         const line = `${cursor}${activeMarker}${isSelected ? cAccent(p.name) : p.name} ${scopeTag}${modelStr}${agentCount}`;
-        listLines.push(line);
+        listLines.push(isSelected && theme?.bg ? theme.bg("selectedBg", line) : line);
       }
     }
 
@@ -319,18 +319,21 @@ export function createSddProfilesModal(input: ModalInput) {
       if (agentName === ORCHESTRATOR_AGENT_KEY) {
         const modelLabel = editingProfile.default_model ? editingProfile.default_model : cDim("(no definido)");
         const effortLabel = editingProfile.default_effort ? cAccent(`[${editingProfile.default_effort}]`) : cDim("[default]");
-        listLines.push(`${cursor}${isSelected ? cAccent(agentName) : agentName} → ${cSuccess(modelLabel)} ${effortLabel}`);
+        const line = `${cursor}${isSelected ? cAccent(agentName) : agentName} → ${cSuccess(modelLabel)} ${effortLabel}`;
+        listLines.push(isSelected && theme?.bg ? theme.bg("selectedBg", line) : line);
       } else if (
         agentName === ASSIGN_ALL_SUBAGENTS_KEY ||
         agentName === ASSIGN_ALL_EFFORT_KEY ||
         agentName === ASSIGN_CATEGORY_KEY
       ) {
-        listLines.push(`${cursor}${isSelected ? cAccent(agentName) : cWarning(agentName)}`);
+        const line = `${cursor}${isSelected ? cAccent(agentName) : cWarning(agentName)}`;
+        listLines.push(isSelected && theme?.bg ? theme.bg("selectedBg", line) : line);
       } else {
         const assignment = editingProfile.model_profiles[agentName];
         const modelLabel = assignment?.model ? assignment.model : cDim(`(hereda: ${editingProfile.default_model ?? "default"})`);
         const effortLabel = assignment?.effort ? cAccent(`[${assignment.effort}]`) : cDim(`[${editingProfile.default_effort ?? "default"}]`);
-        listLines.push(`${cursor}${isSelected ? cAccent(agentName) : agentName} → ${modelLabel} ${effortLabel}`);
+        const line = `${cursor}${isSelected ? cAccent(agentName) : agentName} → ${modelLabel} ${effortLabel}`;
+        listLines.push(isSelected && theme?.bg ? theme.bg("selectedBg", line) : line);
       }
     }
 
@@ -385,7 +388,8 @@ export function createSddProfilesModal(input: ModalInput) {
         const idx = pickerScrollOffset + offset;
         const isSelected = idx === pickerIndex;
         const cursor = isSelected ? cAccent("› ") : "  ";
-        listLines.push(`${cursor}${isSelected ? cAccent(item) : item}`);
+        const line = `${cursor}${isSelected ? cAccent(item) : item}`;
+        listLines.push(isSelected && theme?.bg ? theme.bg("selectedBg", line) : line);
       }
     }
 
@@ -437,7 +441,8 @@ export function createSddProfilesModal(input: ModalInput) {
                     ? cDim(" (predeterminado del proveedor / sin forzar)")
                     : cDim(" (heredar por defecto del perfil)")
                   : "";
-      listLines.push(`${cursor}${isSelected ? cAccent(item) : item}${desc}`);
+      const line = `${cursor}${isSelected ? cAccent(item) : item}${desc}`;
+      listLines.push(isSelected && theme?.bg ? theme.bg("selectedBg", line) : line);
     }
 
     return frameModal("🧠 Nivel de Razonamiento (Effort)", [...header, ...listLines], width, theme);
@@ -464,7 +469,8 @@ export function createSddProfilesModal(input: ModalInput) {
     for (const [idx, item] of categoryRows.entries()) {
       const isSelected = idx === pickerIndex;
       const cursor = isSelected ? cAccent("› ") : "  ";
-      listLines.push(`${cursor}${isSelected ? cAccent(item) : item}`);
+      const line = `${cursor}${isSelected ? cAccent(item) : item}`;
+      listLines.push(isSelected && theme?.bg ? theme.bg("selectedBg", line) : line);
     }
 
     return frameModal("📦 Elegir Categoría", [...header, ...listLines], width, theme);

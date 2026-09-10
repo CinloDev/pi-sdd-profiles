@@ -13,17 +13,6 @@ export function constrainLines(lines: string[], width: number): string[] {
   return lines.map((line) => truncateToWidth(line, safeWidth));
 }
 
-// Deep dark violet #140a28 (from Cinlodev CUTE theme: toolSuccessBg)
-const VIOLET_BG_CODE = "\x1b[48;2;20;10;40m";
-const VIOLET_BG_RESET = "\x1b[49m";
-
-export function applyDarkVioletBg(text: string): string {
-  const preserved = text
-    .replace(/\x1b\[0m/g, `\x1b[0m${VIOLET_BG_CODE}`)
-    .replace(/\x1b\[49m/g, VIOLET_BG_CODE);
-  return `${VIOLET_BG_CODE}${preserved}${VIOLET_BG_RESET}`;
-}
-
 export function frameModal(title: string, body: string[], width: number, theme?: any): string[] {
   const safeWidth = Math.max(1, Math.floor(width || 1));
   if (safeWidth < 30) return constrainLines([title, ...body], safeWidth);
@@ -41,8 +30,8 @@ export function frameModal(title: string, body: string[], width: number, theme?:
 
   const rows = body.map((line) => {
     const padded = padToVisibleWidth(line, contentWidth);
-    const bgRow = applyDarkVioletBg(` ${padded} `);
-    return `${borderChar("║")}${bgRow}${borderChar("║")}`;
+    const rowContent = theme?.bg ? theme.bg("customMessageBg", ` ${padded} `) : ` ${padded} `;
+    return `${borderChar("║")}${rowContent}${borderChar("║")}`;
   });
 
   return [top, ...rows, bottom];
