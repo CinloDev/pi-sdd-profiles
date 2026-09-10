@@ -392,4 +392,384 @@ describe("modal overlay component", () => {
     content = lines.join("\n");
     expect(content).toContain("Orquestador");
   });
+
+  describe("mouse interactions", () => {
+    it("should handle wheel down and wheel up to navigate profiles list", () => {
+      const done = vi.fn();
+      const modal = createSddProfilesModal({
+        manager: mockManager,
+        availableModels,
+        done,
+      });
+
+      expect(typeof (modal as any).handleMouse).toBe("function");
+
+      modal.render(80);
+
+      // Mouse wheel down (wheelDelta > 0)
+      const resDown = (modal as any).handleMouse({
+        type: "wheel",
+        button: "none",
+        x: 10,
+        y: 5,
+        screenX: 10,
+        screenY: 5,
+        width: 80,
+        height: 15,
+        shift: false,
+        alt: false,
+        ctrl: false,
+        wheelDelta: 1,
+      });
+
+      expect(resDown?.handled).toBe(true);
+
+      let lines = modal.render(80);
+      // deep-reasoning (index 1) should now be selected with cursor ›
+      expect(lines.join("\n")).toMatch(/›\s+.*deep-reasoning/);
+
+      // Mouse wheel up (wheelDelta < 0)
+      const resUp = (modal as any).handleMouse({
+        type: "wheel",
+        button: "none",
+        x: 10,
+        y: 5,
+        screenX: 10,
+        screenY: 5,
+        width: 80,
+        height: 15,
+        shift: false,
+        alt: false,
+        ctrl: false,
+        wheelDelta: -1,
+      });
+
+      expect(resUp?.handled).toBe(true);
+      lines = modal.render(80);
+      // cin (index 0) should be selected again
+      expect(lines.join("\n")).toMatch(/›\s+.*cin\b/);
+    });
+
+    it("should select a profile item on left click and activate on double click", () => {
+      const done = vi.fn();
+      const onProfileActivated = vi.fn();
+      const modal = createSddProfilesModal({
+        manager: mockManager,
+        availableModels,
+        onProfileActivated,
+        done,
+      });
+
+      const lines = modal.render(80);
+      // Find row index of "deep-reasoning"
+      const deepReasoningRowIndex = lines.findIndex((l) => l.includes("deep-reasoning"));
+      expect(deepReasoningRowIndex).toBeGreaterThan(0);
+
+      // Single click on deep-reasoning row
+      const clickRes = (modal as any).handleMouse({
+        type: "click",
+        button: "left",
+        x: 15,
+        y: deepReasoningRowIndex,
+        screenX: 15,
+        screenY: deepReasoningRowIndex,
+        width: 80,
+        height: lines.length,
+        shift: false,
+        alt: false,
+        ctrl: false,
+        clickCount: 1,
+      });
+
+      expect(clickRes?.handled).toBe(true);
+      let updatedLines = modal.render(80);
+      expect(updatedLines.join("\n")).toMatch(/›\s+.*deep-reasoning/);
+      expect(mockManager.activateProfile).not.toHaveBeenCalled();
+
+      // Double click on deep-reasoning row
+      const doubleClickRes = (modal as any).handleMouse({
+        type: "click",
+        button: "left",
+        x: 15,
+        y: deepReasoningRowIndex,
+        screenX: 15,
+        screenY: deepReasoningRowIndex,
+        width: 80,
+        height: lines.length,
+        shift: false,
+        alt: false,
+        ctrl: false,
+        clickCount: 2,
+      });
+
+      expect(doubleClickRes?.handled).toBe(true);
+      expect(mockManager.activateProfile).toHaveBeenCalledWith("deep-reasoning", "global");
+      expect(onProfileActivated).toHaveBeenCalled();
+    });
+
+    it("should trigger actions when clicking on shortcut buttons", () => {
+      const done = vi.fn();
+      const modal = createSddProfilesModal({
+        manager: mockManager,
+        availableModels,
+        done,
+      });
+
+      const lines = modal.render(100);
+      // Find shortcuts line
+      const shortcutsRowIndex = lines.findIndex((l) => l.includes("[Esc]") && l.includes("Salir"));
+      expect(shortcutsRowIndex).toBeGreaterThan(0);
+
+      const shortcutsLine = lines[shortcutsRowIndex];
+      const escPos = shortcutsLine.indexOf("[Esc]");
+      expect(escPos).toBeGreaterThan(0);
+
+      // Click on [Esc]
+      const clickRes = (modal as any).handleMouse({
+        type: "click",
+        button: "left",
+        x: escPos + 2,
+        y: shortcutsRowIndex,
+        screenX: escPos + 2,
+        screenY: shortcutsRowIndex,
+        width: 80,
+        height: lines.length,
+        shift: false,
+        alt: false,
+        ctrl: false,
+        clickCount: 1,
+      });
+
+      expect(clickRes?.handled).toBe(true);
+      expect(done).toHaveBeenCalledWith({ action: "closed" });
+    });
+
+    it("should handle wheel and clicks in profile editor and model picker", () => {
+      const done = vi.fn();
+      const modal = createSddProfilesModal({
+        manager: mockManager,
+        availableModels: [
+          "anthropic/claude-sonnet-4-5",
+          "openai/gpt-4o",
+          "google/gemini-pro",
+        ],
+        done,
+      });
+
+      modal.render(80);
+      // Press 'e' to enter profile editor
+      modal.handleInput("e");
+      let lines = modal.render(80);
+      expect(lines.join("\n")).toContain("Editar Perfil: cin");
+
+      // Wheel down in editor
+      (modal as any).handleMouse({
+        type: "wheel",
+        button: "none",
+        x: 10,
+        y: 5,
+        screenX: 10,
+        screenY: 5,
+        width: 80,
+        height: lines.length,
+        shift: false,
+        alt: false,
+        ctrl: false,
+        wheelDelta: 1,
+      });
+
+      lines = modal.render(80);
+      // Row 1 in editor is ASSIGN_ALL_SUBAGENTS_KEY
+      expect(lines.join("\n")).toMatch(/›\s+.*Asignar un mismo modelo a TODOS/);
+
+      // Press Enter to open model picker for all
+      modal.handleInput("\r");
+      lines = modal.render(80);
+      expect(lines.join("\n")).toContain("Asignar modelo a:");
+
+      // Wheel down in picker
+      (modal as any).handleMouse({
+        type: "wheel",
+        button: "none",
+        x: 10,
+        y: 6,
+        screenX: 10,
+        screenY: 6,
+        width: 80,
+        height: lines.length,
+        shift: false,
+        alt: false,
+        ctrl: false,
+        wheelDelta: 1,
+      });
+
+      lines = modal.render(80);
+      expect(lines.join("\n")).toMatch(/›\s+openai\/.*gpt-4o/);
+
+      // Find the row of "google/gemini-pro"
+      const geminiRow = lines.findIndex((l) => l.includes("google/gemini-pro"));
+      expect(geminiRow).toBeGreaterThan(0);
+
+      // Double click on gemini
+      (modal as any).handleMouse({
+        type: "click",
+        button: "left",
+        x: 15,
+        y: geminiRow,
+        screenX: 15,
+        screenY: geminiRow,
+        width: 80,
+        height: lines.length,
+        shift: false,
+        alt: false,
+        ctrl: false,
+        clickCount: 2,
+      });
+
+      lines = modal.render(80);
+      // Opens effort picker!
+      expect(lines.join("\n")).toContain("Nivel de Razonamiento");
+    });
+
+    it("should ignore right clicks, move events, wheel with zero delta, or out-of-bounds clicks", () => {
+      const done = vi.fn();
+      const modal = createSddProfilesModal({
+        manager: mockManager,
+        availableModels,
+        done,
+      });
+
+      modal.render(80);
+
+      // Right click
+      const rightClick = (modal as any).handleMouse({
+        type: "click",
+        button: "right",
+        x: 10,
+        y: 5,
+        screenX: 10,
+        screenY: 5,
+        width: 80,
+        height: 15,
+        shift: false,
+        alt: false,
+        ctrl: false,
+      });
+      expect(rightClick).toBeUndefined();
+
+      // Move event
+      const moveEvent = (modal as any).handleMouse({
+        type: "move",
+        button: "none",
+        x: 10,
+        y: 5,
+        screenX: 10,
+        screenY: 5,
+        width: 80,
+        height: 15,
+        shift: false,
+        alt: false,
+        ctrl: false,
+      });
+      expect(moveEvent).toBeUndefined();
+
+      // Wheel with 0 delta
+      const wheelZero = (modal as any).handleMouse({
+        type: "wheel",
+        button: "none",
+        x: 10,
+        y: 5,
+        screenX: 10,
+        screenY: 5,
+        width: 80,
+        height: 15,
+        shift: false,
+        alt: false,
+        ctrl: false,
+        wheelDelta: 0,
+      });
+      expect(wheelZero).toBeUndefined();
+
+      // Click on row 0 (top border)
+      const borderClick = (modal as any).handleMouse({
+        type: "click",
+        button: "left",
+        x: 10,
+        y: 0,
+        screenX: 10,
+        screenY: 0,
+        width: 80,
+        height: 15,
+        shift: false,
+        alt: false,
+        ctrl: false,
+      });
+      expect(borderClick).toBeUndefined();
+    });
+
+    it("should handle clicks in confirm-delete view (confirm and cancel)", () => {
+      const done = vi.fn();
+      mockManager.deleteProfile.mockReturnValueOnce(true);
+      const modal = createSddProfilesModal({
+        manager: mockManager,
+        availableModels,
+        done,
+      });
+
+      // Press 'd' to open confirm-delete
+      modal.render(100);
+      modal.handleInput("d");
+
+      let lines = modal.render(100);
+      expect(lines.join("\n")).toContain("Confirmar Eliminación");
+
+      const shortcutsRow = lines.findIndex((l) => l.includes("Cancelar"));
+      expect(shortcutsRow).toBeGreaterThan(0);
+
+      const cancelLine = lines[shortcutsRow];
+      const cancelX = cancelLine.indexOf("Cancelar");
+
+      // Click on Cancelar
+      const cancelRes = (modal as any).handleMouse({
+        type: "click",
+        button: "left",
+        x: cancelX + 1,
+        y: shortcutsRow,
+        screenX: cancelX + 1,
+        screenY: shortcutsRow,
+        width: 100,
+        height: lines.length,
+        shift: false,
+        alt: false,
+        ctrl: false,
+      });
+      expect(cancelRes?.handled).toBe(true);
+
+      lines = modal.render(100);
+      expect(lines.join("\n")).toContain("SDD Profile Manager");
+      expect(mockManager.deleteProfile).not.toHaveBeenCalled();
+
+      // Open confirm delete again
+      modal.handleInput("d");
+      lines = modal.render(100);
+      const confirmX = lines[shortcutsRow].indexOf("Confirmar");
+
+      // Click on Confirmar
+      const confirmRes = (modal as any).handleMouse({
+        type: "click",
+        button: "left",
+        x: confirmX + 1,
+        y: shortcutsRow,
+        screenX: confirmX + 1,
+        screenY: shortcutsRow,
+        width: 100,
+        height: lines.length,
+        shift: false,
+        alt: false,
+        ctrl: false,
+      });
+      expect(confirmRes?.handled).toBe(true);
+      expect(mockManager.deleteProfile).toHaveBeenCalledWith("cin");
+    });
+  });
 });
