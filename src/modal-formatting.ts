@@ -13,12 +13,26 @@ export function constrainLines(lines: string[], width: number): string[] {
   return lines.map((line) => truncateToWidth(line, safeWidth));
 }
 
-export function frameModal(title: string, body: string[], width: number, theme?: any): string[] {
+export interface FrameModalOptions {
+  paddingX?: number;
+  paddingY?: number;
+}
+
+export function frameModal(
+  title: string,
+  body: string[],
+  width: number,
+  theme?: any,
+  options: FrameModalOptions = {}
+): string[] {
   const safeWidth = Math.max(1, Math.floor(width || 1));
   if (safeWidth < 30) return constrainLines([title, ...body], safeWidth);
 
+  const paddingX = options.paddingX ?? 2;
+  const paddingY = options.paddingY ?? 1;
+
   const innerWidth = safeWidth - 2;
-  const contentWidth = Math.max(1, innerWidth - 2);
+  const contentWidth = Math.max(1, innerWidth - (paddingX * 2));
 
   const titleFormatted = theme?.fg ? theme.fg("accent", ` ${title} `) : ` ${title} `;
   const borderChar = (char: string) => (theme?.fg ? theme.fg("borderAccent", char) || theme.fg("border", char) : char);
@@ -28,13 +42,25 @@ export function frameModal(title: string, body: string[], width: number, theme?:
   const top = `${borderChar("╔")}${titleFormatted}${borderChar("═".repeat(rightDashesCount))}${borderChar("╗")}`;
   const bottom = `${borderChar("╚")}${borderChar("═".repeat(innerWidth))}${borderChar("╝")}`;
 
+  const padLeft = " ".repeat(paddingX);
+  const padRight = " ".repeat(paddingX);
+
+  const renderRow = (content: string): string => {
+    const rowContent = theme?.bg ? theme.bg("customMessageBg", content) : content;
+    return `${borderChar("║")}${rowContent}${borderChar("║")}`;
+  };
+
+  const emptyLine = renderRow(" ".repeat(innerWidth));
+
   const rows = body.map((line) => {
     const padded = padToVisibleWidth(line, contentWidth);
-    const rowContent = theme?.bg ? theme.bg("customMessageBg", ` ${padded} `) : ` ${padded} `;
-    return `${borderChar("║")}${rowContent}${borderChar("║")}`;
+    return renderRow(`${padLeft}${padded}${padRight}`);
   });
 
-  return [top, ...rows, bottom];
+  const verticalTop = Array(paddingY).fill(emptyLine);
+  const verticalBottom = Array(paddingY).fill(emptyLine);
+
+  return [top, ...verticalTop, ...rows, ...verticalBottom, bottom];
 }
 
 export function normalizeModalKey(data: string): string {

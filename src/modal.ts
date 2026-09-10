@@ -5,6 +5,7 @@ import {
   constrainLines,
   frameModal,
   normalizeModalKey,
+  padToVisibleWidth,
   visibleWidth,
 } from "./modal-formatting.js";
 
@@ -145,6 +146,15 @@ export function createSddProfilesModal(input: ModalInput) {
     return { index: newIndex, scroll: newScroll };
   };
 
+  // Theme-aware tone helpers following gentle-pi palette conventions
+  const cText = (t: string) => (theme?.fg ? theme.fg("text", t) : t);
+  const cAccent = (t: string) => (theme?.fg ? theme.fg("accent", t) : t);
+  const cMuted = (t: string) => (theme?.fg ? theme.fg("muted", t) : t);
+  const cDim = (t: string) => (theme?.fg ? theme.fg("dim", t) : t);
+  const cSuccess = (t: string) => (theme?.fg ? theme.fg("success", t) : t);
+  const cWarning = (t: string) => (theme?.fg ? theme.fg("warning", t) : t);
+  const cError = (t: string) => (theme?.fg ? theme.fg("error", t) : t);
+
   // View: Profiles List
   const renderProfilesList = (width: number): string[] => {
     const maxVisible = 10;
@@ -172,7 +182,7 @@ export function createSddProfilesModal(input: ModalInput) {
     );
 
     const header = [
-      `Estado: Perfil activo → ${activeProfileName ? cSuccess(`● ${activeProfileName}`) : cDim("(ninguno)")}${cDim(activeOrchestrator)}`,
+      `${cMuted("Estado:")} ${cText("Perfil activo")} → ${activeProfileName ? cSuccess(`● ${activeProfileName}`) : cDim("(ninguno)")}${cDim(activeOrchestrator)}`,
       ...(feedbackMessage
         ? [isWarningFeedback
             ? (theme?.fg ? theme.fg("warning", `⚠️ ${feedbackMessage}`) : `⚠️ ${feedbackMessage}`)
@@ -194,22 +204,22 @@ export function createSddProfilesModal(input: ModalInput) {
           ? cSuccess("● ")
           : cDim("○ ");
 
-        const scopeTag = cDim(`[${p.scope}]`);
+        const scopeTag = p.scope === "project" ? cDim(" [proyecto]") : "";
         const modelStr = p.default_model ? cMuted(` (Orquestador: ${p.default_model})`) : "";
         const agentCount = cDim(` · ${p.agent_count} subagentes`);
 
-        const line = `${cursor}${activeMarker}${isSelected ? cAccent(p.name) : p.name} ${scopeTag}${modelStr}${agentCount}`;
-        listLines.push(isSelected && theme?.bg ? theme.bg("selectedBg", line) : line);
+        const line = `${cursor}${activeMarker}${isSelected ? cAccent(p.name) : cText(p.name)}${scopeTag}${modelStr}${agentCount}`;
+        listLines.push(line);
       }
     }
 
     const currentP = selectedProfile();
     const footer = [
       cDim("═".repeat(Math.max(10, width - 6))),
-      currentP?.description ? `Descripción: ${cDim(currentP.description)}` : `Perfil: ${currentP?.name ?? "ninguno"}`,
+      currentP?.description ? `${cMuted("Descripción:")} ${cText(currentP.description)}` : `${cMuted("Perfil:")} ${cText(currentP?.name ?? "ninguno")}`,
     ];
 
-    return frameModal("🎛️ SDD Profile Manager · De y para la Comunidad", [...header, ...listLines, ...footer], width, theme);
+    return frameModal("🤖 SDD Profile Manager · De y para la Comunidad", [...header, ...listLines, ...footer], width, theme);
   };
 
   // View: Create Profile
@@ -319,21 +329,21 @@ export function createSddProfilesModal(input: ModalInput) {
       if (agentName === ORCHESTRATOR_AGENT_KEY) {
         const modelLabel = editingProfile.default_model ? editingProfile.default_model : cDim("(no definido)");
         const effortLabel = editingProfile.default_effort ? cAccent(`[${editingProfile.default_effort}]`) : cDim("[default]");
-        const line = `${cursor}${isSelected ? cAccent(agentName) : agentName} → ${cSuccess(modelLabel)} ${effortLabel}`;
-        listLines.push(isSelected && theme?.bg ? theme.bg("selectedBg", line) : line);
+        const line = `${cursor}${isSelected ? cAccent(agentName) : cText(agentName)} → ${cSuccess(modelLabel)} ${effortLabel}`;
+        listLines.push(line);
       } else if (
         agentName === ASSIGN_ALL_SUBAGENTS_KEY ||
         agentName === ASSIGN_ALL_EFFORT_KEY ||
         agentName === ASSIGN_CATEGORY_KEY
       ) {
         const line = `${cursor}${isSelected ? cAccent(agentName) : cWarning(agentName)}`;
-        listLines.push(isSelected && theme?.bg ? theme.bg("selectedBg", line) : line);
+        listLines.push(line);
       } else {
         const assignment = editingProfile.model_profiles[agentName];
         const modelLabel = assignment?.model ? assignment.model : cDim(`(hereda: ${editingProfile.default_model ?? "default"})`);
         const effortLabel = assignment?.effort ? cAccent(`[${assignment.effort}]`) : cDim(`[${editingProfile.default_effort ?? "default"}]`);
-        const line = `${cursor}${isSelected ? cAccent(agentName) : agentName} → ${modelLabel} ${effortLabel}`;
-        listLines.push(isSelected && theme?.bg ? theme.bg("selectedBg", line) : line);
+        const line = `${cursor}${isSelected ? cAccent(agentName) : cText(agentName)} → ${modelLabel} ${effortLabel}`;
+        listLines.push(line);
       }
     }
 
@@ -388,8 +398,8 @@ export function createSddProfilesModal(input: ModalInput) {
         const idx = pickerScrollOffset + offset;
         const isSelected = idx === pickerIndex;
         const cursor = isSelected ? cAccent("› ") : "  ";
-        const line = `${cursor}${isSelected ? cAccent(item) : item}`;
-        listLines.push(isSelected && theme?.bg ? theme.bg("selectedBg", line) : line);
+        const line = `${cursor}${isSelected ? cAccent(item) : cText(item)}`;
+        listLines.push(line);
       }
     }
 
@@ -441,8 +451,8 @@ export function createSddProfilesModal(input: ModalInput) {
                     ? cDim(" (predeterminado del proveedor / sin forzar)")
                     : cDim(" (heredar por defecto del perfil)")
                   : "";
-      const line = `${cursor}${isSelected ? cAccent(item) : item}${desc}`;
-      listLines.push(isSelected && theme?.bg ? theme.bg("selectedBg", line) : line);
+      const line = `${cursor}${isSelected ? cAccent(item) : cText(item)}${desc}`;
+      listLines.push(line);
     }
 
     return frameModal("🧠 Nivel de Razonamiento (Effort)", [...header, ...listLines], width, theme);
@@ -469,8 +479,8 @@ export function createSddProfilesModal(input: ModalInput) {
     for (const [idx, item] of categoryRows.entries()) {
       const isSelected = idx === pickerIndex;
       const cursor = isSelected ? cAccent("› ") : "  ";
-      const line = `${cursor}${isSelected ? cAccent(item) : item}`;
-      listLines.push(isSelected && theme?.bg ? theme.bg("selectedBg", line) : line);
+      const line = `${cursor}${isSelected ? cAccent(item) : cText(item)}`;
+      listLines.push(line);
     }
 
     return frameModal("📦 Elegir Categoría", [...header, ...listLines], width, theme);

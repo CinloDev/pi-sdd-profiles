@@ -37,7 +37,7 @@ export default function sddProfilesExtension(pi: any): void {
 
     // 1. Update footer status indicator
     if (ctx?.hasUI && typeof ctx?.ui?.setStatus === "function") {
-      ctx.ui.setStatus("sdd-profile", `🎛️ [${profile.name}]`);
+      ctx.ui.setStatus("sdd-profile", `🤖 [${profile.name}]`);
     }
 
     // 2. Switch main session model if default_model is defined
@@ -165,12 +165,12 @@ export default function sddProfilesExtension(pi: any): void {
             const cols = process.stdout.columns || 100;
             // Keep card compact and centered: max 94 columns on wide screens,
             // while adapting responsively on smaller terminals.
-            const targetWidth = Math.max(56, Math.min(cols - 4, 94));
+            const targetWidth = Math.max(60, Math.min(cols - 4, 104));
             return {
               anchor: "center",
               width: targetWidth,
               maxHeight: "85%",
-              minWidth: 56,
+              minWidth: 60,
             };
           },
         }

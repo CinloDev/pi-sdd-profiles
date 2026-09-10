@@ -1,4 +1,4 @@
-# pi-sdd-profiles 🎛️ · *De y para la Comunidad*
+# pi-sdd-profiles 🤖 · *De y para la Comunidad*
 
 Extensión nativa para **Pi Coding Agent** para crear, guardar, versionar y alternar perfiles de modelos de IA para **Spec-Driven Development (SDD)** y subagentes en caliente.
 
