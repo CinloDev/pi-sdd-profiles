@@ -34,8 +34,21 @@ export function frameModal(
   const innerWidth = safeWidth - 2;
   const contentWidth = Math.max(1, innerWidth - (paddingX * 2));
 
-  const titleFormatted = theme?.fg ? theme.fg("accent", ` ${title} `) : ` ${title} `;
-  const borderChar = (char: string) => (theme?.fg ? theme.fg("borderAccent", char) || theme.fg("border", char) : char);
+  const safeFg = (color: string, text: string, fallback = "text"): string => {
+    if (!theme?.fg) return text;
+    try {
+      return theme.fg(color, text);
+    } catch {
+      try {
+        return theme.fg(fallback, text);
+      } catch {
+        return text;
+      }
+    }
+  };
+
+  const titleFormatted = safeFg("accent", ` ${title} `, "text");
+  const borderChar = (char: string) => safeFg("borderAccent", char, "border");
 
   const visibleTitleLen = visibleWidth(titleFormatted);
   const rightDashesCount = Math.max(0, innerWidth - visibleTitleLen);
@@ -46,7 +59,14 @@ export function frameModal(
   const padRight = " ".repeat(paddingX);
 
   const renderRow = (content: string): string => {
-    const rowContent = theme?.bg ? theme.bg("customMessageBg", content) : content;
+    let rowContent = content;
+    if (theme?.bg) {
+      try {
+        rowContent = theme.bg("customMessageBg", content);
+      } catch {
+        rowContent = content;
+      }
+    }
     return `${borderChar("║")}${rowContent}${borderChar("║")}`;
   };
 

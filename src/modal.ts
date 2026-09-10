@@ -146,14 +146,51 @@ export function createSddProfilesModal(input: ModalInput) {
     return { index: newIndex, scroll: newScroll };
   };
 
-  // Theme-aware tone helpers following gentle-pi palette conventions
-  const cText = (t: string) => (theme?.fg ? theme.fg("text", t) : t);
-  const cAccent = (t: string) => (theme?.fg ? theme.fg("accent", t) : t);
-  const cMuted = (t: string) => (theme?.fg ? theme.fg("muted", t) : t);
-  const cDim = (t: string) => (theme?.fg ? theme.fg("dim", t) : t);
-  const cSuccess = (t: string) => (theme?.fg ? theme.fg("success", t) : t);
-  const cWarning = (t: string) => (theme?.fg ? theme.fg("warning", t) : t);
-  const cError = (t: string) => (theme?.fg ? theme.fg("error", t) : t);
+  // Safe tone helpers bound to Pi's theme tokens with graceful fallbacks
+  const safeFg = (color: string, text: string, fallback = "text"): string => {
+    if (!theme?.fg) return text;
+    try {
+      return theme.fg(color, text);
+    } catch {
+      try {
+        return theme.fg(fallback, text);
+      } catch {
+        return text;
+      }
+    }
+  };
+
+  // Palette mapping:
+  // - Heading / Labels: mdHeading (warm gold #E0C27A in Cinlodev CUTE, amber in default)
+  // - Primary Accent / Active selection: accent (pastel pink #F095C8 in CUTE, primary in default)
+  // - Highlight / Focus: borderAccent (bright pink #FFB1DD in CUTE)
+  // - Models / Functions: syntaxFunction (pastel sky blue #A9C7EE in CUTE, cyan in default)
+  // - Success / Active status: success (mint green #B4E7C7 in CUTE, green in default)
+  // - Warning / Alerts / Project scope: warning (amber orange #F2B86D in CUTE, yellow in default)
+  // - Errors: error (coral red #FF718F in CUTE, red in default)
+  // - Primary text / Actions: text (crisp light cream #F6EFF3 in CUTE)
+  // - Secondary text / Category counts: secondary (soft rose #D7A0B8 in CUTE)
+  // - Borders / Dividers: borderMuted (purple #5c2c74 in CUTE) or border (purple #8e44ad in CUTE)
+  // - Hints: muted (dusty rose)
+  // - Inactive / Dim: dim
+  const cHeading = (t: string) => safeFg("mdHeading", t, "accent");
+  const cAccent = (t: string) => safeFg("accent", t, "text");
+  const cHighlight = (t: string) => safeFg("borderAccent", t, "accent");
+  const cModel = (t: string) => safeFg("syntaxFunction", t, "accent");
+  const cSuccess = (t: string) => safeFg("success", t, "accent");
+  const cWarning = (t: string) => safeFg("warning", t, "accent");
+  const cError = (t: string) => safeFg("error", t, "accent");
+  const cText = (t: string) => safeFg("text", t, "text");
+  const cSecondary = (t: string) => safeFg("secondary", t, "text");
+  const cBorder = (t: string) => safeFg("border", t, "text");
+  const cBorderMuted = (t: string) => safeFg("borderMuted", t, "border");
+  const cMuted = (t: string) => safeFg("muted", t, "text");
+  const cDim = (t: string) => safeFg("dim", t, "muted");
+  const cBold = (t: string) => (theme?.bold ? theme.bold(t) : `\x1b[1m${t}\x1b[22m`);
+
+  const formatShortcut = (key: string, action: string): string => {
+    return `${cAccent(key)} ${cText(action)}`;
+  };
 
   // View: Profiles List
   const renderProfilesList = (width: number): string[] => {
@@ -164,13 +201,10 @@ export function createSddProfilesModal(input: ModalInput) {
 
     const visibleProfiles = profiles.slice(profileScrollOffset, profileScrollOffset + maxVisible);
 
-    const cAccent = (t: string) => (theme?.fg ? theme.fg("accent", t) : t);
-    const cMuted = (t: string) => (theme?.fg ? theme.fg("muted", t) : t);
-    const cSuccess = (t: string) => (theme?.fg ? theme.fg("success", t) : t);
-    const cDim = (t: string) => (theme?.fg ? theme.fg("dim", t) : t);
-
     const activeProfileObj = activeProfileName ? manager.getProfile(activeProfileName) : null;
-    const activeOrchestrator = activeProfileObj?.default_model ? ` · Orquestador: ${activeProfileObj.default_model}` : "";
+    const activeOrchestrator = activeProfileObj?.default_model
+      ? ` ${cBorderMuted("·")} ${cHeading("Orquestador:")} ${cModel(activeProfileObj.default_model)}`
+      : "";
 
     const isWarningFeedback = feedbackMessage && (
       feedbackMessage.includes("Error") ||
@@ -181,42 +215,54 @@ export function createSddProfilesModal(input: ModalInput) {
       feedbackMessage.includes("Ya existe")
     );
 
+    const shortcuts = [
+      formatShortcut("[Enter]", "Activar"),
+      formatShortcut("[e]", "Editar"),
+      formatShortcut("[r]", "Renombrar"),
+      formatShortcut("[n]", "Nuevo"),
+      formatShortcut("[d]", "Borrar"),
+      formatShortcut("[Esc]", "Salir"),
+    ].join(cBorderMuted(" · "));
+
     const header = [
-      `${cMuted("Estado:")} ${cText("Perfil activo")} → ${activeProfileName ? cSuccess(`● ${activeProfileName}`) : cDim("(ninguno)")}${cDim(activeOrchestrator)}`,
+      `${cHeading("Estado:")} ${cText("Perfil activo")} → ${activeProfileName ? cSuccess(`● ${activeProfileName}`) : cDim("(ninguno)")}${activeOrchestrator}`,
       ...(feedbackMessage
         ? [isWarningFeedback
-            ? (theme?.fg ? theme.fg("warning", `⚠️ ${feedbackMessage}`) : `⚠️ ${feedbackMessage}`)
+            ? cWarning(`⚠️ ${feedbackMessage}`)
             : cSuccess(`✔ ${feedbackMessage}`)]
         : []),
-      cMuted("[Enter] Activar · [e] Editar · [r] Renombrar · [n] Nuevo · [d] Borrar · [Esc] Salir"),
-      cDim("═".repeat(Math.max(10, width - 6))),
+      shortcuts,
+      cBorderMuted("═".repeat(Math.max(10, width - 6))),
     ];
 
     const listLines: string[] = [];
     if (profiles.length === 0) {
-      listLines.push("No hay perfiles disponibles. Presioná 'n' para crear uno nuevo.");
+      listLines.push(cMuted("No hay perfiles disponibles. Presioná 'n' para crear uno nuevo."));
     } else {
       for (const [offset, p] of visibleProfiles.entries()) {
         const idx = profileScrollOffset + offset;
         const isSelected = idx === selectedProfileIndex;
-        const cursor = isSelected ? cAccent("› ") : "  ";
+        const cursor = isSelected ? cHighlight("› ") : "  ";
         const activeMarker = p.is_active || (activeProfileName && p.name.toLowerCase() === activeProfileName.toLowerCase())
           ? cSuccess("● ")
           : cDim("○ ");
 
-        const scopeTag = p.scope === "project" ? cDim(" [proyecto]") : "";
-        const modelStr = p.default_model ? cMuted(` (Orquestador: ${p.default_model})`) : "";
-        const agentCount = cDim(` · ${p.agent_count} subagentes`);
+        const scopeTag = p.scope === "project" ? cWarning(" [proyecto]") : "";
+        const modelStr = p.default_model ? ` ${cBorderMuted("·")} ${cMuted("Orquestador:")} ${cModel(p.default_model)}` : "";
+        const agentCount = ` ${cBorderMuted("·")} ${cHeading(String(p.agent_count))} ${cSecondary("subagentes")}`;
 
-        const line = `${cursor}${activeMarker}${isSelected ? cAccent(p.name) : cText(p.name)}${scopeTag}${modelStr}${agentCount}`;
+        const nameFormatted = isSelected ? cBold(cAccent(p.name)) : cText(p.name);
+        const line = `${cursor}${activeMarker}${nameFormatted}${scopeTag}${modelStr}${agentCount}`;
         listLines.push(line);
       }
     }
 
     const currentP = selectedProfile();
     const footer = [
-      cDim("═".repeat(Math.max(10, width - 6))),
-      currentP?.description ? `${cMuted("Descripción:")} ${cText(currentP.description)}` : `${cMuted("Perfil:")} ${cText(currentP?.name ?? "ninguno")}`,
+      cBorderMuted("═".repeat(Math.max(10, width - 6))),
+      currentP?.description
+        ? `${cHeading("Descripción:")} ${cText(currentP.description)}`
+        : `${cHeading("Perfil:")} ${cAccent(currentP?.name ?? "ninguno")}`,
     ];
 
     return frameModal("🤖 SDD Profile Manager · De y para la Comunidad", [...header, ...listLines, ...footer], width, theme);
@@ -224,21 +270,22 @@ export function createSddProfilesModal(input: ModalInput) {
 
   // View: Create Profile
   const renderCreateProfile = (width: number): string[] => {
-    const cAccent = (t: string) => (theme?.fg ? theme.fg("accent", t) : t);
-    const cMuted = (t: string) => (theme?.fg ? theme.fg("muted", t) : t);
-    const cDim = (t: string) => (theme?.fg ? theme.fg("dim", t) : t);
-
     const header = [
-      "Crear un nuevo perfil de modelos SDD y Orquestador:",
-      cMuted("Escribí el nombre del nuevo perfil y presioná [Enter] para continuar al editor."),
-      cDim("═".repeat(Math.max(10, width - 6))),
+      cHeading("Crear un nuevo perfil de modelos SDD y Orquestador:"),
+      cText("Escribí el nombre del nuevo perfil y presioná [Enter] para continuar al editor."),
+      cBorderMuted("═".repeat(Math.max(10, width - 6))),
     ];
 
-    const inputLine = `  Nombre: ${cAccent(newProfileInput || "...")}${cAccent("█")}`;
+    const inputLine = `  ${cHeading("Nombre:")} ${cAccent(newProfileInput || "...")}${cHighlight("█")}`;
+
+    const shortcuts = [
+      formatShortcut("[Enter]", "Crear y Configurar"),
+      formatShortcut("[Esc]", "Cancelar"),
+    ].join(cBorderMuted(" · "));
 
     const footer = [
-      cDim("═".repeat(Math.max(10, width - 6))),
-      cMuted("Atajos: [Enter] Crear y Configurar · [Esc] Cancelar"),
+      cBorderMuted("═".repeat(Math.max(10, width - 6))),
+      shortcuts,
     ];
 
     return frameModal("➕ Nuevo Perfil SDD", [...header, "", inputLine, "", ...footer], width, theme);
@@ -246,23 +293,23 @@ export function createSddProfilesModal(input: ModalInput) {
 
   // View: Rename Profile
   const renderRenameProfile = (width: number): string[] => {
-    const cAccent = (t: string) => (theme?.fg ? theme.fg("accent", t) : t);
-    const cMuted = (t: string) => (theme?.fg ? theme.fg("muted", t) : t);
-    const cDim = (t: string) => (theme?.fg ? theme.fg("dim", t) : t);
-    const cWarning = (t: string) => (theme?.fg ? theme.fg("warning", t) : t);
-
     const header = [
-      `Renombrar perfil: ${cAccent(renamingOldName)}`,
-      cMuted("Escribí el nuevo nombre y presioná [Enter] para guardar."),
-      cDim("═".repeat(Math.max(10, width - 6))),
+      `${cHeading("Renombrar perfil:")} ${cAccent(renamingOldName)}`,
+      cText("Escribí el nuevo nombre y presioná [Enter] para guardar."),
+      cBorderMuted("═".repeat(Math.max(10, width - 6))),
     ];
 
-    const inputLine = `  Nuevo nombre: ${cAccent(renameProfileInput || "...")}${cAccent("█")}`;
-    const errorLine = renameErrorMessage ? cWarning(`  ✖ ${renameErrorMessage}`) : "";
+    const inputLine = `  ${cHeading("Nuevo nombre:")} ${cAccent(renameProfileInput || "...")}${cHighlight("█")}`;
+    const errorLine = renameErrorMessage ? cError(`  ✖ ${renameErrorMessage}`) : "";
+
+    const shortcuts = [
+      formatShortcut("[Enter]", "Guardar Nombre"),
+      formatShortcut("[Esc]", "Cancelar"),
+    ].join(cBorderMuted(" · "));
 
     const footer = [
-      cDim("═".repeat(Math.max(10, width - 6))),
-      cMuted("Atajos: [Enter] Guardar Nombre · [Esc] Cancelar"),
+      cBorderMuted("═".repeat(Math.max(10, width - 6))),
+      shortcuts,
     ];
 
     return frameModal("✏️ Renombrar Perfil SDD", [...header, "", inputLine, errorLine, ...footer], width, theme);
@@ -270,26 +317,26 @@ export function createSddProfilesModal(input: ModalInput) {
 
   // View: Confirm Delete Profile
   const renderConfirmDelete = (width: number): string[] => {
-    const cWarning = (t: string) => (theme?.fg ? theme.fg("warning", t) : t);
-    const cMuted = (t: string) => (theme?.fg ? theme.fg("muted", t) : t);
-    const cAccent = (t: string) => (theme?.fg ? theme.fg("accent", t) : t);
-    const cDim = (t: string) => (theme?.fg ? theme.fg("dim", t) : t);
-
     const header = [
       cWarning("⚠️ ¿Estás segura de que querés eliminar este perfil?"),
-      `Perfil a borrar: ${cAccent(deletingProfileName)}`,
-      cDim("═".repeat(Math.max(10, width - 6))),
+      `${cHeading("Perfil a borrar:")} ${cAccent(deletingProfileName)}`,
+      cBorderMuted("═".repeat(Math.max(10, width - 6))),
     ];
 
     const warningBody = [
       "",
-      cMuted("  Esta acción eliminará el archivo del perfil permanentemente de disco."),
+      cText("  Esta acción eliminará el archivo del perfil permanentemente de disco."),
       "",
     ];
 
+    const shortcuts = [
+      formatShortcut("[Enter / y]", "Confirmar Eliminación"),
+      formatShortcut("[Esc / n]", "Cancelar"),
+    ].join(cBorderMuted(" · "));
+
     const footer = [
-      cDim("═".repeat(Math.max(10, width - 6))),
-      cMuted("Atajos: [Enter / y] Confirmar Eliminación · [Esc / n] Cancelar"),
+      cBorderMuted("═".repeat(Math.max(10, width - 6))),
+      shortcuts,
     ];
 
     return frameModal("🗑️ Confirmar Eliminación", [...header, ...warningBody, ...footer], width, theme);
@@ -306,50 +353,59 @@ export function createSddProfilesModal(input: ModalInput) {
 
     const visibleAgents = editingAgentsList.slice(agentScrollOffset, agentScrollOffset + maxVisible);
 
-    const cAccent = (t: string) => (theme?.fg ? theme.fg("accent", t) : t);
-    const cMuted = (t: string) => (theme?.fg ? theme.fg("muted", t) : t);
-    const cSuccess = (t: string) => (theme?.fg ? theme.fg("success", t) : t);
-    const cDim = (t: string) => (theme?.fg ? theme.fg("dim", t) : t);
-    const cWarning = (t: string) => (theme?.fg ? theme.fg("warning", t) : t);
-
     const dirtyIndicator = isDirty ? cWarning(" (cambios sin guardar*)") : "";
 
+    const shortcuts = [
+      formatShortcut("[Enter/m]", "Modelo"),
+      formatShortcut("[e]", "Esfuerzo"),
+      formatShortcut("[a]", "A todos"),
+      formatShortcut("[c]", "Categoría"),
+      formatShortcut("[s]", "Guardar"),
+      formatShortcut("[Esc]", "Volver"),
+    ].join(cBorderMuted(" · "));
+
     const header = [
-      `Perfil: ${cAccent(editingProfile.name)}${dirtyIndicator} · Orquestador: ${cMuted(editingProfile.default_model ?? "default")} (${editingProfile.default_effort ?? "medium"})`,
-      cMuted("[Enter/m] Modelo · [e] Esfuerzo · [a] A todos · [c] Categoría · [s] Guardar · [Esc] Volver"),
-      cDim("═".repeat(Math.max(10, width - 6))),
+      `${cHeading("Perfil:")} ${cAccent(editingProfile.name)}${dirtyIndicator} ${cBorderMuted("│")} ${cHeading("Orquestador:")} ${cModel(editingProfile.default_model ?? "default")} ${cAccent(`(${editingProfile.default_effort ?? "medium"})`)}`,
+      shortcuts,
+      cBorderMuted("═".repeat(Math.max(10, width - 6))),
     ];
 
     const listLines: string[] = [];
     for (const [offset, agentName] of visibleAgents.entries()) {
       const idx = agentScrollOffset + offset;
       const isSelected = idx === selectedAgentIndex;
-      const cursor = isSelected ? cAccent("› ") : "  ";
+      const cursor = isSelected ? cHighlight("› ") : "  ";
 
       if (agentName === ORCHESTRATOR_AGENT_KEY) {
-        const modelLabel = editingProfile.default_model ? editingProfile.default_model : cDim("(no definido)");
+        const modelLabel = editingProfile.default_model ? cModel(editingProfile.default_model) : cDim("(no definido)");
         const effortLabel = editingProfile.default_effort ? cAccent(`[${editingProfile.default_effort}]`) : cDim("[default]");
-        const line = `${cursor}${isSelected ? cAccent(agentName) : cText(agentName)} → ${cSuccess(modelLabel)} ${effortLabel}`;
+        const nameFormatted = isSelected ? cBold(cAccent(agentName)) : cHeading(agentName);
+        const line = `${cursor}${nameFormatted} ${cBorderMuted("→")} ${modelLabel} ${effortLabel}`;
         listLines.push(line);
       } else if (
         agentName === ASSIGN_ALL_SUBAGENTS_KEY ||
         agentName === ASSIGN_ALL_EFFORT_KEY ||
         agentName === ASSIGN_CATEGORY_KEY
       ) {
-        const line = `${cursor}${isSelected ? cAccent(agentName) : cWarning(agentName)}`;
+        const line = `${cursor}${isSelected ? cBold(cHighlight(agentName)) : cWarning(agentName)}`;
         listLines.push(line);
       } else {
         const assignment = editingProfile.model_profiles[agentName];
-        const modelLabel = assignment?.model ? assignment.model : cDim(`(hereda: ${editingProfile.default_model ?? "default"})`);
-        const effortLabel = assignment?.effort ? cAccent(`[${assignment.effort}]`) : cDim(`[${editingProfile.default_effort ?? "default"}]`);
-        const line = `${cursor}${isSelected ? cAccent(agentName) : cText(agentName)} → ${modelLabel} ${effortLabel}`;
+        const modelLabel = assignment?.model
+          ? cModel(assignment.model)
+          : `${cMuted("hereda:")} ${cModel(editingProfile.default_model ?? "default")}`;
+        const effortLabel = assignment?.effort
+          ? cAccent(`[${assignment.effort}]`)
+          : cDim(`[${editingProfile.default_effort ?? "default"}]`);
+        const nameFormatted = isSelected ? cBold(cAccent(agentName)) : cText(agentName);
+        const line = `${cursor}${nameFormatted} ${cBorderMuted("→")} ${modelLabel} ${effortLabel}`;
         listLines.push(line);
       }
     }
 
     const footer = [
-      cDim("═".repeat(Math.max(10, width - 6))),
-      `Seleccionado: ${cAccent(selectedAgent())}`,
+      cBorderMuted("═".repeat(Math.max(10, width - 6))),
+      `${cHeading("Seleccionado:")} ${cAccent(selectedAgent())}`,
     ];
 
     return frameModal(`✏️ Editar Perfil: ${editingProfile.name}`, [...header, ...listLines, ...footer], width, theme);
@@ -364,11 +420,6 @@ export function createSddProfilesModal(input: ModalInput) {
 
     const visibleItems = pickerItems.slice(pickerScrollOffset, pickerScrollOffset + maxVisible);
 
-    const cAccent = (t: string) => (theme?.fg ? theme.fg("accent", t) : t);
-    const cMuted = (t: string) => (theme?.fg ? theme.fg("muted", t) : t);
-    const cDim = (t: string) => (theme?.fg ? theme.fg("dim", t) : t);
-    const cWarning = (t: string) => (theme?.fg ? theme.fg("warning", t) : t);
-
     const titleTarget =
       pickerTarget === "all-models"
         ? "TODOS los subagentes"
@@ -379,26 +430,42 @@ export function createSddProfilesModal(input: ModalInput) {
             : `Agente: ${selectedAgent()}`;
 
     const filterBox = modelFilter
-      ? `Filtrar: ${cAccent(modelFilter)}${cAccent("█")} ${cDim(`(${pickerItems.length}/${allPickerModels.length} modelos)`)}`
-      : `Filtrar: ${cDim("(escribí cualquier texto para filtrar modelos...)")} ${cDim(`(${allPickerModels.length} disponibles)`)}`;
+      ? `${cHeading("Filtrar:")} ${cAccent(modelFilter)}${cHighlight("█")} ${cSecondary(`(${pickerItems.length}/${allPickerModels.length} modelos)`)}`
+      : `${cHeading("Filtrar:")} ${cMuted("(escribí cualquier texto para filtrar modelos...)")} ${cSecondary(`(${allPickerModels.length} disponibles)`)}`;
+
+    const shortcuts = [
+      formatShortcut("[Escribir]", "Filtrar"),
+      formatShortcut("[↑/↓]", "Navegar"),
+      formatShortcut("[Enter]", "Elegir"),
+      formatShortcut("[Backspace]", "Borrar"),
+      formatShortcut("[Esc]", "Volver"),
+    ].join(cBorderMuted(" · "));
 
     const header = [
-      `Asignar modelo a: ${cAccent(titleTarget)}`,
+      `${cHeading("Asignar modelo a:")} ${cAccent(titleTarget)}`,
       filterBox,
-      cMuted("[Escribir] Filtrar · [↑/↓] Navegar · [Enter] Elegir · [Backspace] Borrar · [Esc] Volver"),
-      cDim("═".repeat(Math.max(10, width - 6))),
+      shortcuts,
+      cBorderMuted("═".repeat(Math.max(10, width - 6))),
     ];
 
     const listLines: string[] = [];
     if (pickerItems.length === 0) {
       listLines.push(cWarning(`  No se encontraron modelos que coincidan con "${modelFilter}".`));
-      listLines.push(cDim("  Presioná [Backspace] para borrar el filtro o [Esc] para volver."));
+      listLines.push(cText("  Presioná [Backspace] para borrar el filtro o [Esc] para volver."));
     } else {
       for (const [offset, item] of visibleItems.entries()) {
         const idx = pickerScrollOffset + offset;
         const isSelected = idx === pickerIndex;
-        const cursor = isSelected ? cAccent("› ") : "  ";
-        const line = `${cursor}${isSelected ? cAccent(item) : cText(item)}`;
+        const cursor = isSelected ? cHighlight("› ") : "  ";
+
+        const slashIdx = item.indexOf("/");
+        const providerPart = slashIdx !== -1 ? cMuted(item.slice(0, slashIdx + 1)) : "";
+        const modelPart = slashIdx !== -1 ? item.slice(slashIdx + 1) : item;
+        const modelFormatted = isSelected
+          ? cBold(cAccent(modelPart))
+          : cModel(modelPart);
+
+        const line = `${cursor}${providerPart}${modelFormatted}`;
         listLines.push(line);
       }
     }
@@ -408,11 +475,6 @@ export function createSddProfilesModal(input: ModalInput) {
 
   // View: Effort Picker
   const renderEffortPicker = (width: number): string[] => {
-    const cAccent = (t: string) => (theme?.fg ? theme.fg("accent", t) : t);
-    const cMuted = (t: string) => (theme?.fg ? theme.fg("muted", t) : t);
-    const cSuccess = (t: string) => (theme?.fg ? theme.fg("success", t) : t);
-    const cDim = (t: string) => (theme?.fg ? theme.fg("dim", t) : t);
-
     const isOrchestrator =
       pickerTarget === "default-model" || selectedAgent() === ORCHESTRATOR_AGENT_KEY;
 
@@ -425,33 +487,48 @@ export function createSddProfilesModal(input: ModalInput) {
             ? "👑 Orquestador (Sesión Principal)"
             : `Agente: ${selectedAgent()}`;
 
-    const modelInfo = stagedModel ? ` · Modelo asignado: ${cSuccess(stagedModel)}` : "";
+    const modelInfo = stagedModel ? ` ${cBorderMuted("·")} ${cHeading("Modelo asignado:")} ${cModel(stagedModel)}` : "";
+
+    const shortcuts = [
+      formatShortcut("[↑/↓]", "Navegar"),
+      formatShortcut("[Enter]", "Confirmar"),
+      formatShortcut("[Esc]", "Saltear esfuerzo"),
+    ].join(cBorderMuted(" · "));
 
     const header = [
-      `Elegir nivel de razonamiento para: ${cAccent(titleTarget)}${modelInfo}`,
-      cMuted("Atajos: [↑/↓] Navegar · [Enter] Confirmar · [Esc] Saltear esfuerzo"),
-      cDim("═".repeat(Math.max(10, width - 6))),
+      `${cHeading("Elegir nivel de razonamiento para:")} ${cAccent(titleTarget)}${modelInfo}`,
+      shortcuts,
+      cBorderMuted("═".repeat(Math.max(10, width - 6))),
     ];
 
     const listLines: string[] = [];
     for (const [idx, item] of EFFORT_OPTIONS.entries()) {
       const isSelected = idx === pickerIndex;
-      const cursor = isSelected ? cAccent("› ") : "  ";
+      const cursor = isSelected ? cHighlight("› ") : "  ";
       const desc =
         item === "high"
-          ? cDim(" (razonamiento alto)")
+          ? ` ${cMuted("(razonamiento alto)")}`
           : item === "medium"
-            ? cDim(" (balance estándar)")
+            ? ` ${cMuted("(balance estándar)")}`
             : item === "low"
-              ? cDim(" (rápido y económico)")
+              ? ` ${cMuted("(rápido y económico)")}`
               : item === "max"
-                ? cDim(" (máxima profundidad)")
+                ? ` ${cMuted("(máxima profundidad)")}`
                 : item === "default"
                   ? isOrchestrator
-                    ? cDim(" (predeterminado del proveedor / sin forzar)")
-                    : cDim(" (heredar por defecto del perfil)")
+                    ? ` ${cMuted("(predeterminado del proveedor / sin forzar)")}`
+                    : ` ${cMuted("(heredar por defecto del perfil)")}`
                   : "";
-      const line = `${cursor}${isSelected ? cAccent(item) : cText(item)}${desc}`;
+
+      const effortColorFn =
+        item === "low" ? cSuccess :
+        item === "medium" ? cHeading :
+        item === "high" ? cWarning :
+        item === "xhigh" || item === "max" ? cError :
+        cSecondary;
+
+      const itemFormatted = isSelected ? cBold(cAccent(item)) : effortColorFn(item);
+      const line = `${cursor}${itemFormatted}${desc}`;
       listLines.push(line);
     }
 
@@ -460,26 +537,30 @@ export function createSddProfilesModal(input: ModalInput) {
 
   // View: Category Picker
   const renderCategoryPicker = (width: number): string[] => {
-    const cAccent = (t: string) => (theme?.fg ? theme.fg("accent", t) : t);
-    const cMuted = (t: string) => (theme?.fg ? theme.fg("muted", t) : t);
-    const cDim = (t: string) => (theme?.fg ? theme.fg("dim", t) : t);
+    const shortcuts = [
+      formatShortcut("[↑/↓]", "Navegar"),
+      formatShortcut("[Enter]", "Elegir"),
+      formatShortcut("[Esc]", "Cancelar"),
+    ].join(cBorderMuted(" · "));
 
     const header = [
-      "Elegir qué categoría de agentes configurar en lote:",
-      cMuted("Atajos: [↑/↓] Navegar · [Enter] Elegir · [Esc] Cancelar"),
-      cDim("═".repeat(Math.max(10, width - 6))),
+      cHeading("Elegir qué categoría de agentes configurar en lote:"),
+      shortcuts,
+      cBorderMuted("═".repeat(Math.max(10, width - 6))),
     ];
 
     const categoryRows = [
-      "👑 Orquestador (Sesión Principal)",
-      ...SDD_AGENT_CATEGORIES.map((cat) => `${cat.name} (${cat.agents.length} agentes)`),
+      { name: "👑 Orquestador (Sesión Principal)", count: 1 },
+      ...SDD_AGENT_CATEGORIES.map((cat) => ({ name: cat.name, count: cat.agents.length })),
     ];
 
     const listLines: string[] = [];
-    for (const [idx, item] of categoryRows.entries()) {
+    for (const [idx, cat] of categoryRows.entries()) {
       const isSelected = idx === pickerIndex;
-      const cursor = isSelected ? cAccent("› ") : "  ";
-      const line = `${cursor}${isSelected ? cAccent(item) : cText(item)}`;
+      const cursor = isSelected ? cHighlight("› ") : "  ";
+      const label = isSelected ? cBold(cAccent(cat.name)) : cText(cat.name);
+      const countLabel = ` ${cBorderMuted("·")} ${cHeading(String(cat.count))} ${cSecondary("agentes")}`;
+      const line = `${cursor}${label}${countLabel}`;
       listLines.push(line);
     }
 

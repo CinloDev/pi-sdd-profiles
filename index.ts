@@ -37,7 +37,7 @@ export default function sddProfilesExtension(pi: any): void {
 
     // 1. Update footer status indicator
     if (ctx?.hasUI && typeof ctx?.ui?.setStatus === "function") {
-      ctx.ui.setStatus("sdd-profile", `🤖 [${profile.name}]`);
+      ctx.ui.setStatus("sdd-profile", `🤖 ${profile.name}`);
     }
 
     // 2. Switch main session model if default_model is defined
