@@ -125,4 +125,37 @@ describe("extension entrypoint", () => {
       }
     }
   });
+
+  it("should update footer status without brackets when active profile is present", async () => {
+    const listeners: Record<string, Function[]> = {};
+    const mockPi = {
+      registerCommand: vi.fn(),
+      registerShortcut: vi.fn(),
+      registerTool: vi.fn(),
+      setModel: vi.fn(),
+      setThinkingLevel: vi.fn(),
+      on: vi.fn((event: string, handler: Function) => {
+        listeners[event] = listeners[event] || [];
+        listeners[event].push(handler);
+      }),
+    };
+
+    sddProfilesExtension(mockPi);
+
+    const startHandler = listeners["session_start"]?.[0];
+    expect(startHandler).toBeDefined();
+
+    const mockCtx = {
+      cwd: process.cwd(),
+      hasUI: true,
+      ui: { setStatus: vi.fn(), notify: vi.fn() },
+    };
+
+    await startHandler({}, mockCtx);
+    if (mockCtx.ui.setStatus.mock.calls.length > 0) {
+      const statusCall = mockCtx.ui.setStatus.mock.calls[0];
+      expect(statusCall[0]).toBe("sdd-profile");
+      expect(statusCall[1]).toMatch(/^🤖 [^\[\]]+$/);
+    }
+  });
 });

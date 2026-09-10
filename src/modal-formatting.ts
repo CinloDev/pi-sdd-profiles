@@ -13,39 +13,74 @@ export function constrainLines(lines: string[], width: number): string[] {
   return lines.map((line) => truncateToWidth(line, safeWidth));
 }
 
-// Deep dark violet #140a28 (from Cinlodev CUTE theme: toolSuccessBg)
-const VIOLET_BG_CODE = "\x1b[48;2;20;10;40m";
-const VIOLET_BG_RESET = "\x1b[49m";
-
-export function applyDarkVioletBg(text: string): string {
-  const preserved = text
-    .replace(/\x1b\[0m/g, `\x1b[0m${VIOLET_BG_CODE}`)
-    .replace(/\x1b\[49m/g, VIOLET_BG_CODE);
-  return `${VIOLET_BG_CODE}${preserved}${VIOLET_BG_RESET}`;
+export interface FrameModalOptions {
+  paddingX?: number;
+  paddingY?: number;
 }
 
-export function frameModal(title: string, body: string[], width: number, theme?: any): string[] {
+export function frameModal(
+  title: string,
+  body: string[],
+  width: number,
+  theme?: any,
+  options: FrameModalOptions = {}
+): string[] {
   const safeWidth = Math.max(1, Math.floor(width || 1));
   if (safeWidth < 30) return constrainLines([title, ...body], safeWidth);
 
-  const innerWidth = safeWidth - 2;
-  const contentWidth = Math.max(1, innerWidth - 2);
+  const paddingX = options.paddingX ?? 2;
+  const paddingY = options.paddingY ?? 1;
 
-  const titleFormatted = theme?.fg ? theme.fg("accent", ` ${title} `) : ` ${title} `;
-  const borderChar = (char: string) => (theme?.fg ? theme.fg("borderAccent", char) || theme.fg("border", char) : char);
+  const innerWidth = safeWidth - 2;
+  const contentWidth = Math.max(1, innerWidth - (paddingX * 2));
+
+  const safeFg = (color: string, text: string, fallback = "text"): string => {
+    if (!theme?.fg) return text;
+    try {
+      return theme.fg(color, text);
+    } catch {
+      try {
+        return theme.fg(fallback, text);
+      } catch {
+        return text;
+      }
+    }
+  };
+
+  const titleFormatted = safeFg("accent", ` ${title} `, "text");
+  const borderChar = (char: string) => safeFg("borderAccent", char, "border");
 
   const visibleTitleLen = visibleWidth(titleFormatted);
   const rightDashesCount = Math.max(0, innerWidth - visibleTitleLen);
   const top = `${borderChar("╔")}${titleFormatted}${borderChar("═".repeat(rightDashesCount))}${borderChar("╗")}`;
   const bottom = `${borderChar("╚")}${borderChar("═".repeat(innerWidth))}${borderChar("╝")}`;
 
+  const padLeft = " ".repeat(paddingX);
+  const padRight = " ".repeat(paddingX);
+
+  const renderRow = (content: string): string => {
+    let rowContent = content;
+    if (theme?.bg) {
+      try {
+        rowContent = theme.bg("customMessageBg", content);
+      } catch {
+        rowContent = content;
+      }
+    }
+    return `${borderChar("║")}${rowContent}${borderChar("║")}`;
+  };
+
+  const emptyLine = renderRow(" ".repeat(innerWidth));
+
   const rows = body.map((line) => {
     const padded = padToVisibleWidth(line, contentWidth);
-    const bgRow = applyDarkVioletBg(` ${padded} `);
-    return `${borderChar("║")}${bgRow}${borderChar("║")}`;
+    return renderRow(`${padLeft}${padded}${padRight}`);
   });
 
-  return [top, ...rows, bottom];
+  const verticalTop = Array(paddingY).fill(emptyLine);
+  const verticalBottom = Array(paddingY).fill(emptyLine);
+
+  return [top, ...verticalTop, ...rows, ...verticalBottom, bottom];
 }
 
 export function normalizeModalKey(data: string): string {
