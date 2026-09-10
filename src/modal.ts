@@ -1,4 +1,5 @@
 import type { ModelProfileEntry, Profile, ProfileSummary, ReasoningEffort } from "./types.js";
+import type { TuiMouseEvent, TuiMouseEventResult } from "@earendil-works/pi-tui";
 import { ALL_KNOWN_AGENTS, SDD_AGENT_CATEGORIES } from "./catalog.js";
 import type { SddProfileManager } from "./manager.js";
 import {
@@ -192,6 +193,73 @@ export function createSddProfilesModal(input: ModalInput) {
     return `${cAccent(key)} ${cText(action)}`;
   };
 
+  interface ClickTarget {
+    y: number;
+    type: "item" | "action";
+    index?: number;
+    key?: string;
+    xStart?: number;
+    xEnd?: number;
+  }
+
+  interface ShortcutDef {
+    keyTag: string;
+    label: string;
+    key?: string;
+  }
+
+  let clickTargets: ClickTarget[] = [];
+  let currentBodyStartY = 2;
+
+  const registerItemTarget = (bodyLineIndex: number, itemIndex: number) => {
+    clickTargets.push({
+      y: currentBodyStartY + bodyLineIndex,
+      type: "item",
+      index: itemIndex,
+    });
+  };
+
+  const registerShortcutTarget = (
+    bodyLineIndex: number,
+    key: string,
+    xStart: number,
+    xEnd: number
+  ) => {
+    clickTargets.push({
+      y: currentBodyStartY + bodyLineIndex,
+      type: "action",
+      key,
+      xStart,
+      xEnd,
+    });
+  };
+
+  const buildShortcutsLine = (
+    bodyLineIndex: number,
+    shortcuts: ShortcutDef[],
+    width: number
+  ): string => {
+    const contentStartX = width < 30 ? 0 : 3;
+    let currentX = contentStartX;
+    const separator = " · ";
+    const sepWidth = visibleWidth(separator);
+    const parts: string[] = [];
+
+    for (let i = 0; i < shortcuts.length; i++) {
+      const s = shortcuts[i];
+      const itemFormatted = formatShortcut(s.keyTag, s.label);
+      const itemVisibleWidth = visibleWidth(`${s.keyTag} ${s.label}`);
+
+      if (s.key) {
+        registerShortcutTarget(bodyLineIndex, s.key, currentX, currentX + itemVisibleWidth);
+      }
+      parts.push(itemFormatted);
+      currentX += itemVisibleWidth + sepWidth;
+    }
+
+    return parts.join(cBorderMuted(separator));
+  };
+
   // View: Profiles List
   const renderProfilesList = (width: number): string[] => {
     const maxVisible = 10;
@@ -215,14 +283,18 @@ export function createSddProfilesModal(input: ModalInput) {
       feedbackMessage.includes("Ya existe")
     );
 
-    const shortcuts = [
-      formatShortcut("[Enter]", "Activar"),
-      formatShortcut("[e]", "Editar"),
-      formatShortcut("[r]", "Renombrar"),
-      formatShortcut("[n]", "Nuevo"),
-      formatShortcut("[d]", "Borrar"),
-      formatShortcut("[Esc]", "Salir"),
-    ].join(cBorderMuted(" · "));
+    const isNarrow = width < 86;
+    const shortcutDefs: ShortcutDef[] = [
+      { keyTag: "[Enter]", label: "Activar", key: "\r" },
+      { keyTag: "[e]", label: isNarrow ? "Edit" : "Editar", key: "e" },
+      { keyTag: "[r]", label: isNarrow ? "Renom" : "Renombrar", key: "r" },
+      { keyTag: "[n]", label: "Nuevo", key: "n" },
+      { keyTag: "[d]", label: "Borrar", key: "d" },
+      { keyTag: "[Esc]", label: "Salir", key: "\u001b" },
+    ];
+
+    const shortcutsLineIndex = 1 + (feedbackMessage ? 1 : 0);
+    const shortcuts = buildShortcutsLine(shortcutsLineIndex, shortcutDefs, width);
 
     const header = [
       `${cHeading("Estado:")} ${cText("Perfil activo")} → ${activeProfileName ? cSuccess(`● ${activeProfileName}`) : cDim("(ninguno)")}${activeOrchestrator}`,
@@ -235,12 +307,14 @@ export function createSddProfilesModal(input: ModalInput) {
       cBorderMuted("═".repeat(Math.max(10, width - 6))),
     ];
 
+    const listStartIndex = header.length;
     const listLines: string[] = [];
     if (profiles.length === 0) {
       listLines.push(cMuted("No hay perfiles disponibles. Presioná 'n' para crear uno nuevo."));
     } else {
       for (const [offset, p] of visibleProfiles.entries()) {
         const idx = profileScrollOffset + offset;
+        registerItemTarget(listStartIndex + offset, idx);
         const isSelected = idx === selectedProfileIndex;
         const cursor = isSelected ? cHighlight("› ") : "  ";
         const activeMarker = p.is_active || (activeProfileName && p.name.toLowerCase() === activeProfileName.toLowerCase())
@@ -278,10 +352,10 @@ export function createSddProfilesModal(input: ModalInput) {
 
     const inputLine = `  ${cHeading("Nombre:")} ${cAccent(newProfileInput || "...")}${cHighlight("█")}`;
 
-    const shortcuts = [
-      formatShortcut("[Enter]", "Crear y Configurar"),
-      formatShortcut("[Esc]", "Cancelar"),
-    ].join(cBorderMuted(" · "));
+    const shortcuts = buildShortcutsLine(7, [
+      { keyTag: "[Enter]", label: "Crear y Configurar", key: "\r" },
+      { keyTag: "[Esc]", label: "Cancelar", key: "\u001b" },
+    ], width);
 
     const footer = [
       cBorderMuted("═".repeat(Math.max(10, width - 6))),
@@ -302,10 +376,10 @@ export function createSddProfilesModal(input: ModalInput) {
     const inputLine = `  ${cHeading("Nuevo nombre:")} ${cAccent(renameProfileInput || "...")}${cHighlight("█")}`;
     const errorLine = renameErrorMessage ? cError(`  ✖ ${renameErrorMessage}`) : "";
 
-    const shortcuts = [
-      formatShortcut("[Enter]", "Guardar Nombre"),
-      formatShortcut("[Esc]", "Cancelar"),
-    ].join(cBorderMuted(" · "));
+    const shortcuts = buildShortcutsLine(7, [
+      { keyTag: "[Enter]", label: "Guardar Nombre", key: "\r" },
+      { keyTag: "[Esc]", label: "Cancelar", key: "\u001b" },
+    ], width);
 
     const footer = [
       cBorderMuted("═".repeat(Math.max(10, width - 6))),
@@ -329,10 +403,10 @@ export function createSddProfilesModal(input: ModalInput) {
       "",
     ];
 
-    const shortcuts = [
-      formatShortcut("[Enter / y]", "Confirmar Eliminación"),
-      formatShortcut("[Esc / n]", "Cancelar"),
-    ].join(cBorderMuted(" · "));
+    const shortcuts = buildShortcutsLine(7, [
+      { keyTag: "[Enter / y]", label: "Confirmar Eliminación", key: "\r" },
+      { keyTag: "[Esc / n]", label: "Cancelar", key: "\u001b" },
+    ], width);
 
     const footer = [
       cBorderMuted("═".repeat(Math.max(10, width - 6))),
@@ -355,14 +429,14 @@ export function createSddProfilesModal(input: ModalInput) {
 
     const dirtyIndicator = isDirty ? cWarning(" (cambios sin guardar*)") : "";
 
-    const shortcuts = [
-      formatShortcut("[Enter/m]", "Modelo"),
-      formatShortcut("[e]", "Esfuerzo"),
-      formatShortcut("[a]", "A todos"),
-      formatShortcut("[c]", "Categoría"),
-      formatShortcut("[s]", "Guardar"),
-      formatShortcut("[Esc]", "Volver"),
-    ].join(cBorderMuted(" · "));
+    const shortcuts = buildShortcutsLine(1, [
+      { keyTag: "[Enter/m]", label: "Modelo", key: "\r" },
+      { keyTag: "[e]", label: "Esfuerzo", key: "e" },
+      { keyTag: "[a]", label: "A todos", key: "a" },
+      { keyTag: "[c]", label: "Categoría", key: "c" },
+      { keyTag: "[s]", label: "Guardar", key: "s" },
+      { keyTag: "[Esc]", label: "Volver", key: "\u001b" },
+    ], width);
 
     const header = [
       `${cHeading("Perfil:")} ${cAccent(editingProfile.name)}${dirtyIndicator} ${cBorderMuted("│")} ${cHeading("Orquestador:")} ${cModel(editingProfile.default_model ?? "default")} ${cAccent(`(${editingProfile.default_effort ?? "medium"})`)}`,
@@ -373,6 +447,7 @@ export function createSddProfilesModal(input: ModalInput) {
     const listLines: string[] = [];
     for (const [offset, agentName] of visibleAgents.entries()) {
       const idx = agentScrollOffset + offset;
+      registerItemTarget(header.length + offset, idx);
       const isSelected = idx === selectedAgentIndex;
       const cursor = isSelected ? cHighlight("› ") : "  ";
 
@@ -433,13 +508,13 @@ export function createSddProfilesModal(input: ModalInput) {
       ? `${cHeading("Filtrar:")} ${cAccent(modelFilter)}${cHighlight("█")} ${cSecondary(`(${pickerItems.length}/${allPickerModels.length} modelos)`)}`
       : `${cHeading("Filtrar:")} ${cMuted("(escribí cualquier texto para filtrar modelos...)")} ${cSecondary(`(${allPickerModels.length} disponibles)`)}`;
 
-    const shortcuts = [
-      formatShortcut("[Escribir]", "Filtrar"),
-      formatShortcut("[↑/↓]", "Navegar"),
-      formatShortcut("[Enter]", "Elegir"),
-      formatShortcut("[Backspace]", "Borrar"),
-      formatShortcut("[Esc]", "Volver"),
-    ].join(cBorderMuted(" · "));
+    const shortcuts = buildShortcutsLine(2, [
+      { keyTag: "[Escribir]", label: "Filtrar" },
+      { keyTag: "[↑/↓]", label: "Navegar" },
+      { keyTag: "[Enter]", label: "Elegir", key: "\r" },
+      { keyTag: "[Backspace]", label: "Borrar" },
+      { keyTag: "[Esc]", label: "Volver", key: "\u001b" },
+    ], width);
 
     const header = [
       `${cHeading("Asignar modelo a:")} ${cAccent(titleTarget)}`,
@@ -455,6 +530,7 @@ export function createSddProfilesModal(input: ModalInput) {
     } else {
       for (const [offset, item] of visibleItems.entries()) {
         const idx = pickerScrollOffset + offset;
+        registerItemTarget(header.length + offset, idx);
         const isSelected = idx === pickerIndex;
         const cursor = isSelected ? cHighlight("› ") : "  ";
 
@@ -489,11 +565,11 @@ export function createSddProfilesModal(input: ModalInput) {
 
     const modelInfo = stagedModel ? ` ${cBorderMuted("·")} ${cHeading("Modelo asignado:")} ${cModel(stagedModel)}` : "";
 
-    const shortcuts = [
-      formatShortcut("[↑/↓]", "Navegar"),
-      formatShortcut("[Enter]", "Confirmar"),
-      formatShortcut("[Esc]", "Saltear esfuerzo"),
-    ].join(cBorderMuted(" · "));
+    const shortcuts = buildShortcutsLine(1, [
+      { keyTag: "[↑/↓]", label: "Navegar" },
+      { keyTag: "[Enter]", label: "Confirmar", key: "\r" },
+      { keyTag: "[Esc]", label: "Saltear esfuerzo", key: "\u001b" },
+    ], width);
 
     const header = [
       `${cHeading("Elegir nivel de razonamiento para:")} ${cAccent(titleTarget)}${modelInfo}`,
@@ -503,6 +579,7 @@ export function createSddProfilesModal(input: ModalInput) {
 
     const listLines: string[] = [];
     for (const [idx, item] of EFFORT_OPTIONS.entries()) {
+      registerItemTarget(header.length + idx, idx);
       const isSelected = idx === pickerIndex;
       const cursor = isSelected ? cHighlight("› ") : "  ";
       const desc =
@@ -537,11 +614,11 @@ export function createSddProfilesModal(input: ModalInput) {
 
   // View: Category Picker
   const renderCategoryPicker = (width: number): string[] => {
-    const shortcuts = [
-      formatShortcut("[↑/↓]", "Navegar"),
-      formatShortcut("[Enter]", "Elegir"),
-      formatShortcut("[Esc]", "Cancelar"),
-    ].join(cBorderMuted(" · "));
+    const shortcuts = buildShortcutsLine(1, [
+      { keyTag: "[↑/↓]", label: "Navegar" },
+      { keyTag: "[Enter]", label: "Elegir", key: "\r" },
+      { keyTag: "[Esc]", label: "Cancelar", key: "\u001b" },
+    ], width);
 
     const header = [
       cHeading("Elegir qué categoría de agentes configurar en lote:"),
@@ -556,6 +633,7 @@ export function createSddProfilesModal(input: ModalInput) {
 
     const listLines: string[] = [];
     for (const [idx, cat] of categoryRows.entries()) {
+      registerItemTarget(header.length + idx, idx);
       const isSelected = idx === pickerIndex;
       const cursor = isSelected ? cHighlight("› ") : "  ";
       const label = isSelected ? cBold(cAccent(cat.name)) : cText(cat.name);
@@ -567,8 +645,10 @@ export function createSddProfilesModal(input: ModalInput) {
     return frameModal("📦 Elegir Categoría", [...header, ...listLines], width, theme);
   };
 
-  return {
+  const modalComponent = {
     render(width: number): string[] {
+      clickTargets = [];
+      currentBodyStartY = width < 30 ? 1 : 2;
       if (view === "create-profile") return constrainLines(renderCreateProfile(width), width);
       if (view === "rename-profile") return constrainLines(renderRenameProfile(width), width);
       if (view === "confirm-delete") return constrainLines(renderConfirmDelete(width), width);
@@ -1006,6 +1086,80 @@ export function createSddProfilesModal(input: ModalInput) {
       requestRender();
     },
 
+    handleMouse(event: TuiMouseEvent): TuiMouseEventResult | undefined {
+      if (event.type === "wheel") {
+        const delta = event.wheelDelta ?? 0;
+        if (delta > 0) {
+          modalComponent.handleInput("\u001b[B"); // down
+          return { handled: true, render: true };
+        } else if (delta < 0) {
+          modalComponent.handleInput("\u001b[A"); // up
+          return { handled: true, render: true };
+        }
+        return undefined;
+      }
+
+      if (event.type === "click" && event.button === "left") {
+        const { x, y, clickCount = 1 } = event;
+        const target = clickTargets.find((t) => {
+          if (t.y !== y) return false;
+          if (t.type === "action") {
+            if (t.xStart !== undefined && t.xEnd !== undefined) {
+              return x >= t.xStart && x <= t.xEnd;
+            }
+          }
+          return true;
+        });
+
+        if (target) {
+          if (target.type === "action" && target.key) {
+            modalComponent.handleInput(target.key);
+            return { handled: true, render: true };
+          }
+
+          if (target.type === "item" && target.index !== undefined) {
+            const itemIdx = target.index;
+            if (view === "profiles-list") {
+              if (itemIdx === selectedProfileIndex || clickCount === 2) {
+                selectedProfileIndex = itemIdx;
+                modalComponent.handleInput("\r");
+              } else {
+                selectedProfileIndex = itemIdx;
+                requestRender();
+              }
+              return { handled: true, render: true };
+            }
+
+            if (view === "profile-editor") {
+              if (itemIdx === selectedAgentIndex || clickCount === 2) {
+                selectedAgentIndex = itemIdx;
+                modalComponent.handleInput("\r");
+              } else {
+                selectedAgentIndex = itemIdx;
+                requestRender();
+              }
+              return { handled: true, render: true };
+            }
+
+            if (view === "model-picker" || view === "effort-picker" || view === "category-picker") {
+              if (itemIdx === pickerIndex || clickCount === 2) {
+                pickerIndex = itemIdx;
+                modalComponent.handleInput("\r");
+              } else {
+                pickerIndex = itemIdx;
+                requestRender();
+              }
+              return { handled: true, render: true };
+            }
+          }
+        }
+      }
+
+      return undefined;
+    },
+
     invalidate(): void {},
   };
+
+  return modalComponent;
 }

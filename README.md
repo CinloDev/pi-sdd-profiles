@@ -13,6 +13,7 @@ Se integra de forma transparente y atómica con [`pi-subagents-j0k3r`](https://g
 ## Características
 
 - 🪟 **Ventana Flotante Modal Interactiva**: Se abre centrada en la terminal (`alt+m`, `ctrl+shift+m` o `/sdd-profile`) sin borrar el historial ni salir del contexto.
+- 🖱️ **Soporte Completo de Mouse (Ruedita y Clics)**: Hacé scroll con la rueda del mouse por listas largas, seleccioná filas con un clic, activá perfiles o abrí selectores con doble clic, y clickeá directamente los botones de acción (`[Activar]`, `[Editar]`, `[Nuevo]`, `[Guardar]`, `[Salir]`) en modo fullscreen.
 - ⚡ **Cambio en caliente**: Alterná perfiles y sincronizá el modelo de sesión y los subagentes al instante.
 - 📦 **Perfiles Estándar Incluidos**:
   - `balanced-default`: Equilibrio entre calidad y costo con Claude Sonnet 4.5 y Claude Haiku 4.5.
@@ -28,6 +29,13 @@ Se integra de forma transparente y atómica con [`pi-subagents-j0k3r`](https://g
 ---
 
 ## Controles en la Ventana Flotante (`alt+m` / `ctrl+shift+m`)
+
+### 🖱️ Navegación con Mouse (Modo Fullscreen)
+Si utilizás Pi en modo fullscreen (`--tui-mode fullscreen` o en `/settings` con `tuiMode: "fullscreen"`), tenés soporte de puntero completo:
+- **Rueda del mouse**: Navegá fluidamente hacia arriba o abajo en cualquier lista (perfiles, subagentes, buscador de modelos, categorías, esfuerzos).
+- **Clic izquierdo**: Selecciona de inmediato el ítem o fila clickeada. Si hacés clic sobre un ítem ya seleccionado, lo activa o abre su configuración.
+- **Doble clic**: Activa el perfil en la lista principal, abre el selector de modelos en el editor o confirma la opción seleccionada.
+- **Clic en botones de acción**: Podés clickear directamente los atajos de la barra superior o inferior (`[Enter] Activar`, `[e] Editar`, `[r] Renombrar`, `[n] Nuevo`, `[d] Borrar`, `[s] Guardar`, `[Esc] Salir/Volver`, `Confirmar`, `Cancelar`).
 
 ### Vista Principal (Lista de Perfiles)
 - `↑` / `↓` o `j` / `k`: Moverse entre los perfiles disponibles.
