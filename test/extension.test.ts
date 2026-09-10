@@ -66,4 +66,63 @@ describe("extension entrypoint", () => {
     expect(invalidRes).toContain('Nivel de esfuerzo inválido: "invalid_effort"');
     expect(mockCtx.ui.notify).toHaveBeenCalledWith(expect.stringContaining("Nivel de esfuerzo inválido"), "error");
   });
+
+  it("should register session_start, session_shutdown, and session_end hooks", () => {
+    const listeners: Record<string, Function[]> = {};
+    const mockPi = {
+      registerCommand: vi.fn(),
+      registerShortcut: vi.fn(),
+      registerTool: vi.fn(),
+      on: vi.fn((event: string, handler: Function) => {
+        listeners[event] = listeners[event] || [];
+        listeners[event].push(handler);
+      }),
+    };
+
+    sddProfilesExtension(mockPi);
+
+    expect(mockPi.on).toHaveBeenCalledWith("session_start", expect.any(Function));
+    expect(mockPi.on).toHaveBeenCalledWith("session_shutdown", expect.any(Function));
+    expect(mockPi.on).toHaveBeenCalledWith("session_end", expect.any(Function));
+  });
+
+  it("should skip session_start work if inside gentle-pi subagent child process", async () => {
+    const listeners: Record<string, Function[]> = {};
+    const mockPi = {
+      registerCommand: vi.fn(),
+      registerShortcut: vi.fn(),
+      registerTool: vi.fn(),
+      setModel: vi.fn(),
+      setThinkingLevel: vi.fn(),
+      on: vi.fn((event: string, handler: Function) => {
+        listeners[event] = listeners[event] || [];
+        listeners[event].push(handler);
+      }),
+    };
+
+    sddProfilesExtension(mockPi);
+
+    const prevChildEnv = process.env.GENTLE_PI_AGENTS_CHILD;
+    process.env.GENTLE_PI_AGENTS_CHILD = "1";
+    try {
+      const startHandler = listeners["session_start"]?.[0];
+      expect(startHandler).toBeDefined();
+
+      const mockCtx = {
+        cwd: "/tmp/mock-cwd",
+        hasUI: true,
+        ui: { setStatus: vi.fn(), notify: vi.fn() },
+      };
+
+      await startHandler({}, mockCtx);
+      expect(mockCtx.ui.setStatus).not.toHaveBeenCalled();
+      expect(mockPi.setModel).not.toHaveBeenCalled();
+    } finally {
+      if (prevChildEnv === undefined) {
+        delete process.env.GENTLE_PI_AGENTS_CHILD;
+      } else {
+        process.env.GENTLE_PI_AGENTS_CHILD = prevChildEnv;
+      }
+    }
+  });
 });

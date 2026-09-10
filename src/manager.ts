@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
 import { ProfileStorage, type StorageOptions } from "./storage.js";
-import { applyProfileToFile, extractProfileFromConfig } from "./sync.js";
+import { applyProfileToFile, extractProfileFromConfig, reconcileProfileWithFile } from "./sync.js";
 import type {
   ModelProfileEntry,
   Profile,
@@ -69,6 +69,42 @@ export class SddProfileManager {
       profile,
       message: `Perfil "${profile.name}" activado correctamente en ${target} subagents.json.`,
     };
+  }
+
+  /**
+   * Reaffirms the active profile against global and/or project subagents.json.
+   * If model_profiles or defaults diverge from the active profile, they are restored atomically.
+   */
+  reaffirmActiveProfile(target: "global" | "project" | "both" = "both"): {
+    globalUpdated: boolean;
+    projectUpdated: boolean;
+  } {
+    const activeName = this.getActiveProfileName();
+    if (!activeName) {
+      return { globalUpdated: false, projectUpdated: false };
+    }
+
+    const profile = this.getProfile(activeName);
+    if (!profile) {
+      return { globalUpdated: false, projectUpdated: false };
+    }
+
+    let globalUpdated = false;
+    let projectUpdated = false;
+
+    if (target === "global" || target === "both") {
+      const res = reconcileProfileWithFile(this.globalSubagentsPath, profile);
+      globalUpdated = res.updated;
+    }
+
+    if (target === "project" || target === "both") {
+      if (fs.existsSync(this.projectSubagentsPath) || target === "project") {
+        const res = reconcileProfileWithFile(this.projectSubagentsPath, profile);
+        projectUpdated = res.updated;
+      }
+    }
+
+    return { globalUpdated, projectUpdated };
   }
 
   /**

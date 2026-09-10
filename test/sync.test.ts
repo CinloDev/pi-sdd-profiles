@@ -2,7 +2,13 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
-import { applyProfileToConfig, extractProfileFromConfig, applyProfileToFile } from "../src/sync.js";
+import {
+  applyProfileToConfig,
+  extractProfileFromConfig,
+  applyProfileToFile,
+  profileDivergesFromConfig,
+  reconcileProfileWithFile,
+} from "../src/sync.js";
 import type { Profile, SubagentsConfigFile } from "../src/types.js";
 
 describe("sync module", () => {
@@ -112,6 +118,63 @@ describe("sync module", () => {
       expect(fs.existsSync(nonExistentPath)).toBe(true);
       const content = JSON.parse(fs.readFileSync(nonExistentPath, "utf-8"));
       expect(content.active_profile).toBe("cinlo-flash");
+    });
+
+    it("should detect divergence when external write (e.g. gentle-pi) overwrites model_profiles", () => {
+      // 1. Initial state: profile is applied
+      applyProfileToFile(configPath, sampleProfile);
+      const raw = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+      expect(profileDivergesFromConfig(raw, sampleProfile)).toBe(false);
+
+      // 2. External actor overwrites model_profiles while keeping active_profile
+      raw.model_profiles["sdd-apply"] = { model: "gentle-pi-overwritten-model", effort: "low" };
+      fs.writeFileSync(configPath, JSON.stringify(raw, null, 2), "utf-8");
+      expect(profileDivergesFromConfig(raw, sampleProfile)).toBe(true);
+
+      // 3. Reconcile restores profile assignments
+      const result = reconcileProfileWithFile(configPath, sampleProfile);
+      expect(result.updated).toBe(true);
+      expect(result.config.model_profiles?.["sdd-apply"]).toEqual({
+        model: "cpamc/cinlo/gemini-3.8-flash-high",
+        effort: "high",
+      });
+
+      // 4. Checking again shows no divergence and reconcile is a no-op
+      const diskContent = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+      expect(profileDivergesFromConfig(diskContent, sampleProfile)).toBe(false);
+      const secondResult = reconcileProfileWithFile(configPath, sampleProfile);
+      expect(secondResult.updated).toBe(false);
+    });
+
+    it("should detect divergence when default_model, default_effort, or active_profile differs", () => {
+      applyProfileToFile(configPath, sampleProfile);
+      const raw = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+
+      // 1. active_profile differs
+      raw.active_profile = "different-profile";
+      expect(profileDivergesFromConfig(raw, sampleProfile)).toBe(true);
+      raw.active_profile = sampleProfile.name;
+
+      // 2. default_model differs
+      raw.default_model = "other/model";
+      expect(profileDivergesFromConfig(raw, sampleProfile)).toBe(true);
+      raw.default_model = sampleProfile.default_model;
+
+      // 3. default_effort differs
+      raw.default_effort = "low"; // sampleProfile has "high"
+      expect(profileDivergesFromConfig(raw, sampleProfile)).toBe(true);
+      raw.default_effort = sampleProfile.default_effort;
+
+      // 4. agent effort differs
+      raw.model_profiles["sdd-apply"].effort = "low"; // sampleProfile has "high"
+      expect(profileDivergesFromConfig(raw, sampleProfile)).toBe(true);
+    });
+
+    it("should recover and reconcile when target file is corrupt or empty", () => {
+      fs.writeFileSync(configPath, "{ invalid json", "utf-8");
+      const result = reconcileProfileWithFile(configPath, sampleProfile);
+      expect(result.updated).toBe(true);
+      expect(result.config.active_profile).toBe(sampleProfile.name);
     });
   });
 });
