@@ -10,7 +10,97 @@ Se integra de forma transparente y atómica con [`pi-subagents-j0k3r`](https://g
 
 ---
 
-## Características
+## 🚀 Inicio Rápido (30 segundos)
+
+1. **Instalá el paquete en Pi:**
+   ```bash
+   pi install https://github.com/CinloDev/pi-sdd-profiles
+   ```
+2. **Abrí tu terminal Pi:**
+   ```bash
+   pi
+   ```
+3. **Abrí el gestor de perfiles:**
+   Presioná `Alt + M` (o `Ctrl + Shift + M`, o escribí `/sdd-profile`).
+4. **Elegí y activá:**
+   Navegá con las flechas, seleccioná un perfil (por ejemplo `balanced-default` o `deep-reasoning`) y presioná `Enter`. ¡Listo! Tus modelos se sincronizan en caliente sin reiniciar Pi.
+
+---
+
+## 📦 Instalación y Gestión
+
+Pi Coding Agent incluye un gestor nativo de paquetes (`pi install / update / remove`) que registra automáticamente tanto las **extensiones** (`index.ts`) como las **skills** (`skills/sdd-profiles`).
+
+### 1. Instalación Global (Recomendada)
+Para tener `pi-sdd-profiles` disponible en todas tus sesiones y proyectos de Pi:
+
+```bash
+pi install https://github.com/CinloDev/pi-sdd-profiles
+```
+*(También podés usar la sintaxis abreviada `pi install git:github.com/CinloDev/pi-sdd-profiles`)*.
+
+### 2. Instalación solo para el Proyecto Actual
+Si querés registrar la extensión únicamente dentro del directorio de trabajo actual (escribe en `.pi/settings.json`):
+
+```bash
+pi install -l https://github.com/CinloDev/pi-sdd-profiles
+```
+
+### 3. Probar sin instalar (sesión temporal)
+Si querés probar la extensión en una sola ejecución sin modificar tu configuración permanente:
+
+```bash
+pi -e https://github.com/CinloDev/pi-sdd-profiles
+```
+
+### 4. Instalación Local / Para Desarrollo
+Si clonaste o descargaste el repositorio en tu máquina:
+
+```bash
+git clone https://github.com/CinloDev/pi-sdd-profiles.git
+cd pi-sdd-profiles
+
+# Instalarlo en Pi como paquete local:
+pi install .
+```
+
+O si preferís vincularlo mediante un enlace simbólico para reflejar cambios de código en tiempo real:
+
+```bash
+mkdir -p ~/.pi/agent/extensions
+ln -s "$(pwd)" ~/.pi/agent/extensions/pi-sdd-profiles
+```
+*(En Windows: `mklink /D "%USERPROFILE%\.pi\agent\extensions\pi-sdd-profiles" "%CD%"`)*.
+
+### 5. Actualización
+Para actualizar a la última versión disponible del repositorio:
+
+```bash
+pi update https://github.com/CinloDev/pi-sdd-profiles
+```
+O para actualizar todos los paquetes instalados en tu Pi:
+```bash
+pi update --all
+```
+
+### 6. Desinstalación
+Si en algún momento querés remover el paquete:
+
+```bash
+pi remove https://github.com/CinloDev/pi-sdd-profiles
+```
+
+---
+
+## ⚙️ Requisitos y Compatibilidad
+
+- **Pi Coding Agent**: v0.50.0 o superior (`node >= 20`).
+- **Subagentes / SDD**: Diseñado para trabajar en armonía con [`pi-subagents-j0k3r`](https://github.com/j0k3r-dev-rgl/pi-subagents-j0k3r) o cualquier entorno que lea `subagents.json`.
+- **Creación automática de configuración**: Si aún no tenés un archivo `subagents.json` en tu sistema (`~/.pi/agent/subagents.json` o `.pi/subagents.json`), la extensión lo crea automáticamente y de forma segura al activar tu primer perfil.
+
+---
+
+## ✨ Características
 
 - 🪟 **Ventana Flotante Modal Interactiva**: Se abre centrada en la terminal (`alt+m`, `ctrl+shift+m` o `/sdd-profile`) sin borrar el historial ni salir del contexto.
 - 🖱️ **Soporte Completo de Mouse (Ruedita y Clics)**: Hacé scroll con la rueda del mouse por listas largas, seleccioná filas con un clic, activá perfiles o abrí selectores con doble clic, y clickeá directamente los botones de acción (`[Activar]`, `[Editar]`, `[Nuevo]`, `[Guardar]`, `[Salir]`) en modo fullscreen.
@@ -28,7 +118,7 @@ Se integra de forma transparente y atómica con [`pi-subagents-j0k3r`](https://g
 
 ---
 
-## Controles en la Ventana Flotante (`alt+m` / `ctrl+shift+m`)
+## 🎛️ Controles en la Ventana Flotante (`alt+m` / `ctrl+shift+m`)
 
 ### 🖱️ Navegación con Mouse (Modo Fullscreen)
 Si utilizás Pi en modo fullscreen (`--tui-mode fullscreen` o en `/settings` con `tuiMode: "fullscreen"`), tenés soporte de puntero completo:
@@ -75,7 +165,7 @@ Al asignar un modelo a cualquier agente o categoría, se abre la lista flotante 
 
 ---
 
-## Comandos
+## ⌨️ Comandos
 
 | Comando | Descripción |
 |---|---|
@@ -100,7 +190,9 @@ Al asignar un modelo a cualquier agente o categoría, se abre la lista flotante 
 
 ---
 
-## Estructura de un Perfil (`*.json`)
+## 📄 Estructura de un Perfil (`*.json`)
+
+Los perfiles se guardan como archivos JSON limpios e intuitivos en `~/.pi/agent/profiles/` o `.pi/profiles/`:
 
 ```json 
 {
@@ -120,27 +212,10 @@ Al asignar un modelo a cualquier agente o categoría, se abre la lista flotante 
 
 ---
 
-## Instalación en Pi
+## 🧪 Tests
 
-### Opción 1: Enlace directo a extensiones globales de Pi
-```bash
-ln -s $(pwd) ~/.pi/agent/extensions/pi-sdd-profiles
-```
-O simplemente cargándolo al iniciar Pi:
-```bash
-pi -e /home/cinlodev/projects/experiments/pi-sdd-profiles/index.ts
-```
+El proyecto cuenta con suite completa de tests unitarios y verificación estricta de tipos:
 
-### Opción 2: Como paquete local
-```bash
-pi install file:/home/cinlodev/projects/experiments/pi-sdd-profiles
-```
-
----
-
-## Tests
-
-El proyecto cuenta con suite completa de tests unitarios:
 ```bash
 pnpm test
 pnpm typecheck
@@ -148,11 +223,11 @@ pnpm typecheck
 
 ---
 
-## Contribuir 🤝
+## 🤝 Contribuir
 
 ¡Las contribuciones son más que bienvenidas! Si querés reportar un bug, sugerir un nuevo perfil o sumar código, leé nuestra [Guía de Contribución](CONTRIBUTING.md) para conocer las pautas de arquitectura, atajos y tests.
 
 ---
 
-## Licencia
+## 📜 Licencia
 MIT
