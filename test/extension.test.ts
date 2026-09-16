@@ -158,4 +158,49 @@ describe("extension entrypoint", () => {
       expect(statusCall[1]).toMatch(/^🤖 [^\[\]]+$/);
     }
   });
+
+  it("should handle /sdd-profile shortcut commands (status, disable-alt, enable-alt, set, reset)", async () => {
+    const registeredCommands: Record<string, any> = {};
+    const mockPi = {
+      registerCommand: vi.fn((name: string, opts: any) => {
+        registeredCommands[name] = opts;
+      }),
+      registerShortcut: vi.fn(),
+      registerTool: vi.fn(),
+    };
+
+    sddProfilesExtension(mockPi);
+
+    const sddProfileCmd = registeredCommands["sdd-profile"];
+    expect(sddProfileCmd).toBeDefined();
+
+    const mockCtx = {
+      cwd: process.cwd(),
+      ui: {
+        notify: vi.fn(),
+      },
+    };
+
+    // 1. Status command
+    const statusMsg = await sddProfileCmd.handler("shortcut", mockCtx);
+    expect(statusMsg).toContain("Atajos configurados para SDD Profiles");
+    expect(statusMsg).toContain("disable-alt");
+
+    // 2. Disable alt command
+    const disableMsg = await sddProfileCmd.handler("shortcut disable-alt --project", mockCtx);
+    expect(disableMsg).toContain("desactivado");
+    expect(mockCtx.ui.notify).toHaveBeenCalledWith(expect.stringContaining("desactivado"), "info");
+
+    // 3. Enable alt command
+    const enableMsg = await sddProfileCmd.handler("shortcut enable-alt --project", mockCtx);
+    expect(enableMsg).toContain("habilitado");
+
+    // 4. Set custom shortcut
+    const setMsg = await sddProfileCmd.handler("shortcut set ctrl+shift+m --project", mockCtx);
+    expect(setMsg).toContain("Atajos personalizados configurados");
+
+    // 5. Reset shortcuts
+    const resetMsg = await sddProfileCmd.handler("shortcut reset --project", mockCtx);
+    expect(resetMsg).toContain("restablecidos");
+  });
 });
