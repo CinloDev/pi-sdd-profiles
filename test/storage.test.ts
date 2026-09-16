@@ -184,5 +184,34 @@ describe("storage module", () => {
     const list = storage.listProfiles();
     const activeItem = list.find((p) => p.is_active);
     expect(activeItem?.name).toBe("cinlo-flash");
+    expect(activeItem?.active_scope).toBe("global");
+  });
+
+  it("should isolate project-level active state and prioritize it over global", () => {
+    // Set global active profile
+    storage.setActiveProfileName("cinlo-flash", "global");
+    expect(storage.getActiveProfileName("global")).toBe("cinlo-flash");
+    expect(storage.getActiveProfileName("project")).toBeNull();
+    expect(storage.getActiveProfileName("effective")).toBe("cinlo-flash");
+    expect(storage.getActiveScope()).toBe("global");
+
+    // Set project-level active profile
+    storage.setActiveProfileName("project-special", "project");
+    expect(storage.getActiveProfileName("global")).toBe("cinlo-flash");
+    expect(storage.getActiveProfileName("project")).toBe("project-special");
+    expect(storage.getActiveProfileName("effective")).toBe("project-special");
+    expect(storage.getActiveScope()).toBe("project");
+
+    // listProfiles reflects project-level active status
+    const list = storage.listProfiles();
+    const activeItem = list.find((p) => p.is_active);
+    expect(activeItem?.name).toBe("project-special");
+    expect(activeItem?.active_scope).toBe("project");
+
+    // Clear project active profile -> reverts to global
+    storage.clearActiveProfileName("project");
+    expect(storage.getActiveProfileName("project")).toBeNull();
+    expect(storage.getActiveProfileName("effective")).toBe("cinlo-flash");
+    expect(storage.getActiveScope()).toBe("global");
   });
 });

@@ -30,10 +30,21 @@ describe("ui formatting module", () => {
   it("should format profile list correctly with badges", () => {
     const output = formatProfileList(summaries, "cinlo-flash");
     expect(output).toContain("cinlo-flash");
-    expect(output).toContain("[ACTIVO]");
+    expect(output).toContain("[ACTIVO");
     expect(output).toContain("(global)");
     expect(output).toContain("claude-frontier");
     expect(output).toContain("(builtin)");
+  });
+
+  it("should display active_scope in profile list when present", () => {
+    const withScope: ProfileSummary[] = [
+      {
+        ...summaries[0],
+        active_scope: "project",
+      },
+    ];
+    const output = formatProfileList(withScope, "cinlo-flash");
+    expect(output).toContain("[ACTIVO (project)]");
   });
 
   it("should format detailed profile view categorized", () => {

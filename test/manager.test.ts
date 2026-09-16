@@ -91,6 +91,12 @@ describe("manager module", () => {
 
     const updatedProject = JSON.parse(fs.readFileSync(projectSubagentsPath, "utf-8"));
     expect(updatedProject.active_profile).toBe("cinlo-flash");
+    expect(manager.getActiveProfileName("project")).toBe("cinlo-flash");
+    expect(manager.getActiveProfileName("global")).toBeNull();
+    expect(manager.getActiveScope()).toBe("project");
+
+    manager.clearActiveProfile("project");
+    expect(manager.getActiveProfileName("project")).toBeNull();
   });
 
   it("should save current subagents config as a new profile", () => {
@@ -190,5 +196,47 @@ describe("manager module", () => {
     // 4. Second reaffirm is a no-op because it is already synchronized
     const secondReaffirm = manager.reaffirmActiveProfile("global");
     expect(secondReaffirm.globalUpdated).toBe(false);
+  });
+
+  it("should isolate global vs project reaffirmation without cross-contamination", () => {
+    // Create a second profile for project
+    manager.createProfile({
+      name: "project-deep",
+      default_model: "provider/o3-mini",
+      model_profiles: {
+        "sdd-apply": { model: "provider/o3-mini", effort: "high" },
+      },
+      scope: "project",
+    });
+
+    // 1. Activate cinlo-flash globally, and project-deep locally
+    manager.activateProfile("cinlo-flash", "global");
+    manager.activateProfile("project-deep", "project");
+
+    expect(manager.getActiveProfileName("global")).toBe("cinlo-flash");
+    expect(manager.getActiveProfileName("project")).toBe("project-deep");
+    expect(manager.getActiveProfileName("effective")).toBe("project-deep");
+    expect(manager.getActiveScope()).toBe("project");
+
+    // 2. Modify both subagents files externally
+    let gConfig = JSON.parse(fs.readFileSync(globalSubagentsPath, "utf-8"));
+    gConfig.model_profiles["sdd-apply"] = { model: "tampered-global" };
+    fs.writeFileSync(globalSubagentsPath, JSON.stringify(gConfig, null, 2), "utf-8");
+
+    let pConfig = JSON.parse(fs.readFileSync(projectSubagentsPath, "utf-8"));
+    pConfig.model_profiles["sdd-apply"] = { model: "tampered-project" };
+    fs.writeFileSync(projectSubagentsPath, JSON.stringify(pConfig, null, 2), "utf-8");
+
+    // 3. Reaffirm both
+    const res = manager.reaffirmActiveProfile("both");
+    expect(res.globalUpdated).toBe(true);
+    expect(res.projectUpdated).toBe(true);
+
+    // 4. Verify each file was reconciled to its OWN active profile
+    const restoredGlobal = JSON.parse(fs.readFileSync(globalSubagentsPath, "utf-8"));
+    expect(restoredGlobal.model_profiles["sdd-apply"].model).toBe("cpamc/cinlo/gemini-3.8-flash-high");
+
+    const restoredProject = JSON.parse(fs.readFileSync(projectSubagentsPath, "utf-8"));
+    expect(restoredProject.model_profiles["sdd-apply"].model).toBe("provider/o3-mini");
   });
 });

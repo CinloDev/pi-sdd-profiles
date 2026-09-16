@@ -9,6 +9,7 @@ export interface StorageOptions {
   projectDir?: string;
   builtinsDir?: string;
   activeStatePath?: string;
+  projectActiveStatePath?: string;
 }
 
 export class ProfileStorage {
@@ -16,6 +17,7 @@ export class ProfileStorage {
   readonly projectDir: string;
   readonly builtinsDir: string;
   readonly activeStatePath: string;
+  readonly projectActiveStatePath: string;
 
   constructor(options: StorageOptions = {}) {
     const home = os.homedir();
@@ -36,6 +38,8 @@ export class ProfileStorage {
 
     this.activeStatePath =
       options.activeStatePath ?? path.join(this.globalDir, ".active");
+    this.projectActiveStatePath =
+      options.projectActiveStatePath ?? path.join(this.projectDir, ".active");
   }
 
   /**
@@ -129,6 +133,7 @@ export class ProfileStorage {
     const projects = this.readProfilesFromDir(this.projectDir, "project");
 
     const activeName = this.getActiveProfileName();
+    const activeScope = this.getActiveScope();
     const merged = new Map<string, { profile: Profile; scope: ProfileScope; path: string }>();
 
     for (const [key, val] of builtins) {
@@ -145,13 +150,15 @@ export class ProfileStorage {
     for (const [, item] of merged) {
       const { profile, scope, path: filePath } = item;
       const count = Object.keys(profile.model_profiles || {}).length;
+      const isActive = Boolean(activeName && this.sanitizeName(profile.name) === this.sanitizeName(activeName));
       summaries.push({
         name: profile.name,
         description: profile.description,
         default_model: profile.default_model,
         agent_count: count,
         scope,
-        is_active: Boolean(activeName && this.sanitizeName(profile.name) === this.sanitizeName(activeName)),
+        is_active: isActive,
+        active_scope: isActive ? (activeScope ?? undefined) : undefined,
         path: filePath,
       });
     }
@@ -227,19 +234,31 @@ export class ProfileStorage {
   }
 
   /**
-   * Clears the currently active profile name.
+   * Clears active profile state.
+   * - "project": clears only project-level .active
+   * - "global": clears only global .active
+   * - "both": clears both project and global
    */
-  clearActiveProfileName(): void {
-    if (fs.existsSync(this.activeStatePath)) {
-      try {
-        fs.unlinkSync(this.activeStatePath);
-      } catch {}
+  clearActiveProfileName(scope: "project" | "global" | "both" = "both"): void {
+    if (scope === "project" || scope === "both") {
+      if (fs.existsSync(this.projectActiveStatePath)) {
+        try {
+          fs.unlinkSync(this.projectActiveStatePath);
+        } catch {}
+      }
+    }
+    if (scope === "global" || scope === "both") {
+      if (fs.existsSync(this.activeStatePath)) {
+        try {
+          fs.unlinkSync(this.activeStatePath);
+        } catch {}
+      }
     }
   }
 
   /**
    * Deletes a profile from project, global, or builtin scope.
-   * Clears active state if the deleted profile was active.
+   * Clears active state if the deleted profile was active in either scope.
    */
   deleteProfile(name: string): boolean {
     const key = this.sanitizeName(name);
@@ -271,9 +290,13 @@ export class ProfileStorage {
     }
 
     if (deleted) {
-      const active = this.getActiveProfileName();
-      if (active && this.sanitizeName(active) === key) {
-        this.clearActiveProfileName();
+      const projectActive = this.getActiveProfileName("project");
+      if (projectActive && this.sanitizeName(projectActive) === key) {
+        this.clearActiveProfileName("project");
+      }
+      const globalActive = this.getActiveProfileName("global");
+      if (globalActive && this.sanitizeName(globalActive) === key) {
+        this.clearActiveProfileName("global");
       }
     }
 
@@ -328,16 +351,21 @@ export class ProfileStorage {
 
     const savedPath = this.saveProfile(updatedProfile, targetScope);
 
-    // Check if the old profile was currently active
-    const active = this.getActiveProfileName();
-    const wasActive = Boolean(active && this.sanitizeName(active) === oldKey);
+    // Check if the old profile was currently active in project or global
+    const projectActive = this.getActiveProfileName("project");
+    const wasActiveProject = Boolean(projectActive && this.sanitizeName(projectActive) === oldKey);
+    const globalActive = this.getActiveProfileName("global");
+    const wasActiveGlobal = Boolean(globalActive && this.sanitizeName(globalActive) === oldKey);
 
     // Delete old profile
     this.deleteProfile(oldName);
 
     // Update active state if the renamed profile was active
-    if (wasActive) {
-      this.setActiveProfileName(trimmedNew);
+    if (wasActiveProject) {
+      this.setActiveProfileName(trimmedNew, "project");
+    }
+    if (wasActiveGlobal) {
+      this.setActiveProfileName(trimmedNew, "global");
     }
 
     return {
@@ -347,13 +375,10 @@ export class ProfileStorage {
     };
   }
 
-  /**
-   * Retrieves the currently active profile name.
-   */
-  getActiveProfileName(): string | null {
-    if (!fs.existsSync(this.activeStatePath)) return null;
+  private readActiveFromFile(filePath: string): string | null {
+    if (!fs.existsSync(filePath)) return null;
     try {
-      const val = fs.readFileSync(this.activeStatePath, "utf-8").trim();
+      const val = fs.readFileSync(filePath, "utf-8").trim();
       return val.length > 0 ? val : null;
     } catch {
       return null;
@@ -361,13 +386,39 @@ export class ProfileStorage {
   }
 
   /**
-   * Sets the active profile name.
+   * Retrieves the active profile name.
+   * - "project": only checks the project-local .active file.
+   * - "global": only checks the user-global .active file.
+   * - "effective" (or default): checks project first, falls back to global.
    */
-  setActiveProfileName(name: string): void {
-    const dir = path.dirname(this.activeStatePath);
+  getActiveProfileName(scope: "effective" | "project" | "global" = "effective"): string | null {
+    if (scope === "project") {
+      return this.readActiveFromFile(this.projectActiveStatePath);
+    }
+    if (scope === "global") {
+      return this.readActiveFromFile(this.activeStatePath);
+    }
+    return this.readActiveFromFile(this.projectActiveStatePath) ?? this.readActiveFromFile(this.activeStatePath);
+  }
+
+  /**
+   * Returns whether the effective active profile is set at "project" or "global" scope, or null.
+   */
+  getActiveScope(): "project" | "global" | null {
+    if (this.readActiveFromFile(this.projectActiveStatePath)) return "project";
+    if (this.readActiveFromFile(this.activeStatePath)) return "global";
+    return null;
+  }
+
+  /**
+   * Sets the active profile name in the designated scope (global by default).
+   */
+  setActiveProfileName(name: string, scope: "global" | "project" = "global"): void {
+    const targetPath = scope === "project" ? this.projectActiveStatePath : this.activeStatePath;
+    const dir = path.dirname(targetPath);
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
-    fs.writeFileSync(this.activeStatePath, name.trim(), "utf-8");
+    fs.writeFileSync(targetPath, name.trim(), "utf-8");
   }
 }

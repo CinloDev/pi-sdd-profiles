@@ -225,8 +225,8 @@ export default function sddProfilesExtension(pi: any): void {
 
         case "apply": {
           if (!targetName) {
-            ctx.ui?.notify?.("Uso: /sdd-profile apply <nombre>", "warning");
-            return "Uso: /sdd-profile apply <nombre>";
+            ctx.ui?.notify?.("Uso: /sdd-profile apply <nombre> [--project]", "warning");
+            return "Uso: /sdd-profile apply <nombre> [--project]";
           }
           const isProject = parts.includes("--project");
           const result = manager.activateProfile(targetName, isProject ? "project" : "global");
@@ -235,6 +235,21 @@ export default function sddProfilesExtension(pi: any): void {
           }
           ctx.ui?.notify?.(result.message, result.success ? "info" : "error");
           return result.message;
+        }
+
+        case "unset":
+        case "clear-local": {
+          const isGlobal = parts.includes("--global");
+          const scope = isGlobal ? "global" : "project";
+          const res = manager.clearActiveProfile(scope);
+          const effective = manager.getActiveProfileName();
+          const effectiveProfile = effective ? manager.getProfile(effective) : null;
+          if (effectiveProfile) {
+            await syncActiveProfileToRuntime(effectiveProfile, ctx);
+          }
+          const msg = `${res.message} Perfil activo efectivo ahora: ${effective ?? "(ninguno)"}`;
+          ctx.ui?.notify?.(msg, "info");
+          return msg;
         }
 
         case "save": {
@@ -472,11 +487,12 @@ export default function sddProfilesExtension(pi: any): void {
         const manager = getManager(ctx);
         const profiles = manager.listProfiles();
         const active = manager.getActiveProfileName();
+        const activeScope = manager.getActiveScope();
         return {
           content: [
             {
               type: "text",
-              text: JSON.stringify({ active_profile: active, profiles }, null, 2),
+              text: JSON.stringify({ active_profile: active, active_scope: activeScope, profiles }, null, 2),
             },
           ],
         };

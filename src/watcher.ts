@@ -92,7 +92,10 @@ export class SubagentsConfigWatcher {
   reconcile(targetPath: string, scope: "global" | "project"): boolean {
     if (this.stopped || this.isReconciling) return false;
 
-    const activeProfileName = this.manager.getActiveProfileName();
+    const activeProfileName =
+      scope === "project"
+        ? this.manager.getActiveProfileName("project")
+        : this.manager.getActiveProfileName("global");
     if (!activeProfileName) return false;
 
     const profile = this.manager.getProfile(activeProfileName);
