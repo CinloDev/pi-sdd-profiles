@@ -11,11 +11,17 @@ import {
 import { createSddProfilesModal } from "./src/modal.js";
 import { resolveAvailableModels } from "./src/models-resolver.js";
 import { parseReasoningEffort, type ReasoningEffort } from "./src/types.js";
+import {
+  resolveShortcutsConfig,
+  updateShortcutsSettings,
+  DEFAULT_SHORTCUTS,
+} from "./src/shortcuts.js";
 
 export { SddProfileManager } from "./src/manager.js";
 export { SubagentsConfigWatcher } from "./src/watcher.js";
 export * from "./src/types.js";
 export * from "./src/catalog.js";
+export * from "./src/shortcuts.js";
 
 export default function sddProfilesExtension(pi: any): void {
   const getManager = (ctx?: any) => {
@@ -225,8 +231,8 @@ export default function sddProfilesExtension(pi: any): void {
 
         case "apply": {
           if (!targetName) {
-            ctx.ui?.notify?.("Uso: /sdd-profile apply <nombre>", "warning");
-            return "Uso: /sdd-profile apply <nombre>";
+            ctx.ui?.notify?.("Uso: /sdd-profile apply <nombre> [--project]", "warning");
+            return "Uso: /sdd-profile apply <nombre> [--project]";
           }
           const isProject = parts.includes("--project");
           const result = manager.activateProfile(targetName, isProject ? "project" : "global");
@@ -235,6 +241,73 @@ export default function sddProfilesExtension(pi: any): void {
           }
           ctx.ui?.notify?.(result.message, result.success ? "info" : "error");
           return result.message;
+        }
+
+        case "unset":
+        case "clear-local": {
+          const isGlobal = parts.includes("--global");
+          const scope = isGlobal ? "global" : "project";
+          const res = manager.clearActiveProfile(scope);
+          const effective = manager.getActiveProfileName();
+          const effectiveProfile = effective ? manager.getProfile(effective) : null;
+          if (effectiveProfile) {
+            await syncActiveProfileToRuntime(effectiveProfile, ctx);
+          }
+          const msg = `${res.message} Perfil activo efectivo ahora: ${effective ?? "(ninguno)"}`;
+          ctx.ui?.notify?.(msg, "info");
+          return msg;
+        }
+
+        case "shortcut":
+        case "shortcuts": {
+          const action = parts[1]?.toLowerCase();
+          const isProject = parts.includes("--project");
+          const scope = isProject ? "project" : "global";
+
+          if (!action || action === "list" || action === "status" || action === "--project") {
+            const current = resolveShortcutsConfig({ cwd: ctx?.cwd ?? process.cwd() });
+            const listStr = current.length > 0 ? current.map((s) => `\`${s}\``).join(", ") : "*(ninguno - atajos desactivados)*";
+            const msg = `⌨️ **Atajos configurados para SDD Profiles:** ${listStr}\n\nComandos disponibles:\n• \`/sdd-profile shortcut disable-alt\`: Desactiva \`alt+m\` para evitar conflictos con pi-intercom.\n• \`/sdd-profile shortcut enable-alt\`: Vuelve a activar \`alt+m\`.\n• \`/sdd-profile shortcut set <atajos...>\`: Asigna atajos personalizados (ej: \`/sdd-profile shortcut set ctrl+shift+m\`).\n• \`/sdd-profile shortcut reset\`: Restablece los atajos predeterminados (\`ctrl+shift+m\`, \`alt+m\`).`;
+            return msg;
+          }
+
+          if (action === "disable-alt") {
+            const res = updateShortcutsSettings({ disableAltShortcut: true }, { scope, cwd: ctx?.cwd ?? process.cwd() });
+            const msg = `✔ Atajo \`alt+m\` desactivado en ${scope} settings.json. Atajos activos ahora: ${res.shortcuts.map((s) => `\`${s}\``).join(", ")}. Reiniciá o ejecutá /reload para aplicar cambios.`;
+            ctx.ui?.notify?.(msg, "info");
+            return msg;
+          }
+
+          if (action === "enable-alt") {
+            const res = updateShortcutsSettings({ disableAltShortcut: false }, { scope, cwd: ctx?.cwd ?? process.cwd() });
+            const msg = `✔ Atajo \`alt+m\` habilitado en ${scope} settings.json. Atajos activos ahora: ${res.shortcuts.map((s) => `\`${s}\``).join(", ")}. Reiniciá o ejecutá /reload para aplicar cambios.`;
+            ctx.ui?.notify?.(msg, "info");
+            return msg;
+          }
+
+          if (action === "reset") {
+            const res = updateShortcutsSettings({ shortcuts: undefined, disableAltShortcut: false }, { scope, cwd: ctx?.cwd ?? process.cwd() });
+            const msg = `✔ Atajos restablecidos a los valores por defecto (${res.shortcuts.map((s) => `\`${s}\``).join(", ")}). Reiniciá o ejecutá /reload para aplicar cambios.`;
+            ctx.ui?.notify?.(msg, "info");
+            return msg;
+          }
+
+          if (action === "set") {
+            const customShortcuts = parts.slice(2).filter((p) => p !== "--project" && p !== "--global");
+            if (customShortcuts.length === 0) {
+              const msg = "Uso: /sdd-profile shortcut set <atajo1> [atajo2...] [--project]";
+              ctx.ui?.notify?.(msg, "warning");
+              return msg;
+            }
+            const res = updateShortcutsSettings({ shortcuts: customShortcuts }, { scope, cwd: ctx?.cwd ?? process.cwd() });
+            const msg = `✔ Atajos personalizados configurados en ${scope} settings.json: ${res.shortcuts.map((s) => `\`${s}\``).join(", ")}. Reiniciá o ejecutá /reload para aplicar cambios.`;
+            ctx.ui?.notify?.(msg, "info");
+            return msg;
+          }
+
+          const msg = `Acción de atajo no reconocida: "${action}". Usá \`/sdd-profile shortcut\` para ver ayuda.`;
+          ctx.ui?.notify?.(msg, "warning");
+          return msg;
         }
 
         case "save": {
@@ -449,15 +522,17 @@ export default function sddProfilesExtension(pi: any): void {
     await openProfilesModalOrFallback(manager, boundCtx);
   };
 
-  pi.registerShortcut?.("alt+m", {
-    description: "Abrir ventana flotante de perfiles SDD",
-    handler: openModalHandler,
-  });
-
-  pi.registerShortcut?.("ctrl+shift+m", {
-    description: "Abrir ventana flotante de perfiles SDD (alternativa macOS/universal)",
-    handler: openModalHandler,
-  });
+  // Keyboard shortcuts to open interactive selector
+  // Resolved dynamically from settings.json to avoid collisions with pi-intercom or other extensions.
+  // - ctrl+shift+m: universal default
+  // - alt+m: configurable/optional (can be disabled via settings or /sdd-profile shortcut disable-alt)
+  const shortcutsToRegister = resolveShortcutsConfig({ cwd: process.cwd() });
+  for (const shortcut of shortcutsToRegister) {
+    pi.registerShortcut?.(shortcut, {
+      description: `Abrir ventana flotante de perfiles SDD (${shortcut})`,
+      handler: openModalHandler,
+    });
+  }
 
   // Tool registration for LLM / Orchestrator when programmatic switching is needed
   if (typeof pi.registerTool === "function") {
@@ -472,11 +547,12 @@ export default function sddProfilesExtension(pi: any): void {
         const manager = getManager(ctx);
         const profiles = manager.listProfiles();
         const active = manager.getActiveProfileName();
+        const activeScope = manager.getActiveScope();
         return {
           content: [
             {
               type: "text",
-              text: JSON.stringify({ active_profile: active, profiles }, null, 2),
+              text: JSON.stringify({ active_profile: active, active_scope: activeScope, profiles }, null, 2),
             },
           ],
         };

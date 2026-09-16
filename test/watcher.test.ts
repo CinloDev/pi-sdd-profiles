@@ -57,6 +57,7 @@ describe("SubagentsConfigWatcher", () => {
 
     manager = new SddProfileManager({
       globalDir,
+      projectDir: path.join(tmpRoot, "project", ".pi", "profiles"),
       globalSubagentsPath,
       projectSubagentsPath,
       activeStatePath: path.join(globalDir, ".active"),
@@ -165,5 +166,59 @@ describe("SubagentsConfigWatcher", () => {
 
     await new Promise((resolve) => setTimeout(resolve, 150));
     expect(onReconciled).not.toHaveBeenCalled();
+  });
+
+  it("should reconcile project subagents with project active profile and not touch project if no project profile active", () => {
+    const onReconciled = vi.fn();
+    watcher = new SubagentsConfigWatcher({
+      manager,
+      onReconciled,
+    });
+
+    // 1. Project has NO active profile set yet
+    fs.writeFileSync(
+      projectSubagentsPath,
+      JSON.stringify({ model_profiles: { worker: { model: "local-custom" } } }, null, 2),
+      "utf-8"
+    );
+
+    // Reconciling project when project has no active profile should return false and not overwrite
+    const pUpdated = watcher.reconcile(projectSubagentsPath, "project");
+    expect(pUpdated).toBe(false);
+    expect(onReconciled).not.toHaveBeenCalled();
+
+    // 2. Now set a project-specific active profile
+    const projectProfilesDir = path.join(tmpRoot, "project", ".pi", "profiles");
+    fs.mkdirSync(projectProfilesDir, { recursive: true });
+    const projectProfile: Profile = {
+      name: "project-profile",
+      model_profiles: {
+        worker: { model: "provider/project-model", effort: "high" },
+      },
+    };
+    fs.writeFileSync(
+      path.join(projectProfilesDir, "project-profile.json"),
+      JSON.stringify(projectProfile, null, 2),
+      "utf-8"
+    );
+    manager.activateProfile("project-profile", "project");
+
+    // Reconcile project with external tamper
+    fs.writeFileSync(
+      projectSubagentsPath,
+      JSON.stringify({ model_profiles: { worker: { model: "tampered" } } }, null, 2),
+      "utf-8"
+    );
+
+    const projectReconciled = watcher.reconcile(projectSubagentsPath, "project");
+    expect(projectReconciled).toBe(true);
+    expect(onReconciled).toHaveBeenCalledWith({
+      filePath: projectSubagentsPath,
+      profile: projectProfile,
+      scope: "project",
+    });
+
+    const restoredProject = JSON.parse(fs.readFileSync(projectSubagentsPath, "utf-8"));
+    expect(restoredProject.model_profiles.worker.model).toBe("provider/project-model");
   });
 });

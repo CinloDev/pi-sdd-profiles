@@ -62,7 +62,10 @@ Profiles are loaded with hierarchical precedence:
 |---|---|
 | `/sdd-profile` | Opens interactive UI selector (or use shortcut `alt+m` / `ctrl+shift+m`). |
 | `/sdd-profile list` | Lists available profiles and shows which is currently active. |
-| `/sdd-profile apply <name> [--project]` | Activates a profile by name. |
+| `/sdd-profile apply <name> [--project]` | Activates a profile by name (globally or locally for current project). |
+| `/sdd-profile shortcut [disable-alt\|enable-alt\|set\|reset]` | Inspects or customizes shortcut keybindings to avoid collisions with other extensions. |
+| `/sdd-profile unset [--global]` | Clears project-level active profile override (or global if flagged), reverting to default. |
+| `/sdd-profile clear-local` | Alias for unset, clears project-level active profile override. |
 | `/sdd-profile create <name> [model] [effort] [--project]` | Creates a new profile. If arguments are omitted, launches the interactive wizard. |
 | `/sdd-profile save <name> [desc] [--project]` | Takes a snapshot of current `subagents.json` settings and saves it as a profile. |
 | `/sdd-profile show <name>` | Shows detailed model and reasoning effort assignments by phase. |

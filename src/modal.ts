@@ -12,6 +12,7 @@ import {
 
 export type ModalView =
   | "profiles-list"
+  | "choose-scope"
   | "create-profile"
   | "rename-profile"
   | "confirm-delete"
@@ -56,6 +57,10 @@ export function createSddProfilesModal(input: ModalInput) {
   // Navigation state for profiles-list
   let selectedProfileIndex = 0;
   let profileScrollOffset = 0;
+
+  // State for choose scope view
+  let activatingProfile: ProfileSummary | null = null;
+  let chooseScopeIndex = 0; // 0 = project, 1 = global
 
   // State for new profile creation view
   let newProfileInput = "";
@@ -135,6 +140,22 @@ export function createSddProfilesModal(input: ModalInput) {
 
   const selectedAgent = (): string => {
     return editingAgentsList[selectedAgentIndex] ?? editingAgentsList[0];
+  };
+
+  const executeActivation = (scope: "project" | "global") => {
+    if (!activatingProfile) return;
+    const targetName = activatingProfile.name;
+    const res = manager.activateProfile(targetName, scope);
+    if (res.success && res.profile) {
+      onProfileActivated?.(res.profile);
+      refreshProfiles();
+      const scopeLabel = scope === "project" ? "en este proyecto" : "globalmente";
+      feedbackMessage = `Perfil "${targetName}" activado ${scopeLabel} con éxito. Podés seguir configurando o presionar [Esc] para cerrar.`;
+    } else {
+      feedbackMessage = `Error al activar perfil: ${res.message ?? "desconocido"}`;
+    }
+    view = "profiles-list";
+    activatingProfile = null;
   };
 
   // Clamp selection helper
@@ -270,6 +291,8 @@ export function createSddProfilesModal(input: ModalInput) {
     const visibleProfiles = profiles.slice(profileScrollOffset, profileScrollOffset + maxVisible);
 
     const activeProfileObj = activeProfileName ? manager.getProfile(activeProfileName) : null;
+    const activeScope = typeof manager.getActiveScope === "function" ? manager.getActiveScope() : null;
+    const activeScopeBadge = activeScope === "project" ? cWarning(" (proyecto)") : activeScope === "global" ? cMuted(" (global)") : "";
     const activeOrchestrator = activeProfileObj?.default_model
       ? ` ${cBorderMuted("·")} ${cHeading("Orquestador:")} ${cModel(activeProfileObj.default_model)}`
       : "";
@@ -297,7 +320,7 @@ export function createSddProfilesModal(input: ModalInput) {
     const shortcuts = buildShortcutsLine(shortcutsLineIndex, shortcutDefs, width);
 
     const header = [
-      `${cHeading("Estado:")} ${cText("Perfil activo")} → ${activeProfileName ? cSuccess(`● ${activeProfileName}`) : cDim("(ninguno)")}${activeOrchestrator}`,
+      `${cHeading("Estado:")} ${cText("Perfil activo")} → ${activeProfileName ? cSuccess(`● ${activeProfileName}`) + activeScopeBadge : cDim("(ninguno)")}${activeOrchestrator}`,
       ...(feedbackMessage
         ? [isWarningFeedback
             ? cWarning(`⚠️ ${feedbackMessage}`)
@@ -317,16 +340,21 @@ export function createSddProfilesModal(input: ModalInput) {
         registerItemTarget(listStartIndex + offset, idx);
         const isSelected = idx === selectedProfileIndex;
         const cursor = isSelected ? cHighlight("› ") : "  ";
-        const activeMarker = p.is_active || (activeProfileName && p.name.toLowerCase() === activeProfileName.toLowerCase())
+        const isActive = p.is_active || (activeProfileName && p.name.toLowerCase() === activeProfileName.toLowerCase());
+        const activeMarker = isActive
           ? cSuccess("● ")
           : cDim("○ ");
+
+        const activeScopeNote = (isActive && p.active_scope)
+          ? (p.active_scope === "project" ? cSuccess(" (activo en proyecto)") : cMuted(" (activo global)"))
+          : "";
 
         const scopeTag = p.scope === "project" ? cWarning(" [proyecto]") : "";
         const modelStr = p.default_model ? ` ${cBorderMuted("·")} ${cMuted("Orquestador:")} ${cModel(p.default_model)}` : "";
         const agentCount = ` ${cBorderMuted("·")} ${cHeading(String(p.agent_count))} ${cSecondary("subagentes")}`;
 
         const nameFormatted = isSelected ? cBold(cAccent(p.name)) : cText(p.name);
-        const line = `${cursor}${activeMarker}${nameFormatted}${scopeTag}${modelStr}${agentCount}`;
+        const line = `${cursor}${activeMarker}${nameFormatted}${activeScopeNote}${scopeTag}${modelStr}${agentCount}`;
         listLines.push(line);
       }
     }
@@ -414,6 +442,62 @@ export function createSddProfilesModal(input: ModalInput) {
     ];
 
     return frameModal("🗑️ Confirmar Eliminación", [...header, ...warningBody, ...footer], width, theme);
+  };
+
+  // View: Choose Scope
+  const renderChooseScope = (width: number): string[] => {
+    if (!activatingProfile) return ["Error: perfil no seleccionado"];
+
+    const shortcuts = buildShortcutsLine(3, [
+      { keyTag: "[1 / p]", label: "Proyecto", key: "1" },
+      { keyTag: "[2 / g]", label: "Global", key: "2" },
+      { keyTag: "[Enter]", label: "Confirmar", key: "\r" },
+      { keyTag: "[Esc]", label: "Cancelar", key: "\u001b" },
+    ], width);
+
+    const header = [
+      `${cHeading("Activar perfil:")} ${cBold(cAccent(activatingProfile.name))}`,
+      cText("¿Dónde querés activar este perfil de modelos?"),
+      shortcuts,
+      cBorderMuted("═".repeat(Math.max(10, width - 6))),
+    ];
+
+    const scopeOptions = [
+      {
+        num: "[1]",
+        title: "Solo en este proyecto",
+        badge: "(Local)",
+        desc: "Aísla la configuración en .pi/subagents.json para este repositorio.",
+      },
+      {
+        num: "[2]",
+        title: "Global para toda la máquina",
+        badge: "(Global)",
+        desc: "Aplica en ~/.pi/agent/subagents.json para todos tus proyectos.",
+      },
+    ];
+
+    const listLines: string[] = [""];
+    const baseOffset = header.length + 1;
+    for (const [idx, opt] of scopeOptions.entries()) {
+      registerItemTarget(baseOffset + idx * 2, idx);
+      const isSelected = idx === chooseScopeIndex;
+      const cursor = isSelected ? cHighlight("› ") : "  ";
+      const numLabel = cHeading(opt.num + " ");
+      const titleLabel = isSelected ? cBold(cAccent(opt.title)) : cText(opt.title);
+      const badgeLabel = ` ${cWarning(opt.badge)}`;
+      const descLabel = `    ${cSecondary(opt.desc)}`;
+      listLines.push(`${cursor}${numLabel}${titleLabel}${badgeLabel}`);
+      listLines.push(descLabel);
+    }
+    listLines.push("");
+
+    const footer = [
+      cBorderMuted("═".repeat(Math.max(10, width - 6))),
+      cMuted("Presioná [1] o [2] para activar directo, o flechas [↑/↓] + [Enter]"),
+    ];
+
+    return frameModal("🚀 Seleccionar Alcance de Activación", [...header, ...listLines, ...footer], width, theme);
   };
 
   // View: Profile Editor
@@ -649,6 +733,7 @@ export function createSddProfilesModal(input: ModalInput) {
     render(width: number): string[] {
       clickTargets = [];
       currentBodyStartY = width < 30 ? 1 : 2;
+      if (view === "choose-scope") return constrainLines(renderChooseScope(width), width);
       if (view === "create-profile") return constrainLines(renderCreateProfile(width), width);
       if (view === "rename-profile") return constrainLines(renderRenameProfile(width), width);
       if (view === "confirm-delete") return constrainLines(renderConfirmDelete(width), width);
@@ -661,6 +746,35 @@ export function createSddProfilesModal(input: ModalInput) {
 
     handleInput(data: string): void {
       const key = normalizeModalKey(data);
+
+      // --- Sub-View: Choose Scope ---
+      if (view === "choose-scope") {
+        if (key === "esc") {
+          view = "profiles-list";
+          activatingProfile = null;
+        } else if (key === "up" || key === "k") {
+          chooseScopeIndex = Math.max(0, chooseScopeIndex - 1);
+        } else if (key === "down" || key === "j") {
+          chooseScopeIndex = Math.min(1, chooseScopeIndex + 1);
+        } else if (key === "1") {
+          chooseScopeIndex = 0;
+          executeActivation("project");
+        } else if (key === "2") {
+          chooseScopeIndex = 1;
+          executeActivation("global");
+        } else if (key === "p") {
+          chooseScopeIndex = 0;
+          executeActivation("project");
+        } else if (key === "g") {
+          chooseScopeIndex = 1;
+          executeActivation("global");
+        } else if (key === "enter") {
+          const scope = chooseScopeIndex === 0 ? "project" : "global";
+          executeActivation(scope);
+        }
+        requestRender();
+        return;
+      }
 
       // --- Sub-View: Create Profile ---
       if (view === "create-profile") {
@@ -1029,17 +1143,18 @@ export function createSddProfilesModal(input: ModalInput) {
       } else if (key === "end") {
         selectedProfileIndex = Math.max(0, profiles.length - 1);
       } else if (key === "enter") {
-        // Activate selected profile WITHOUT immediately closing
         const target = selectedProfile();
         if (target) {
-          const res = manager.activateProfile(target.name, "global");
-          if (res.success && res.profile) {
-            onProfileActivated?.(res.profile);
-            refreshProfiles();
-            feedbackMessage = `Perfil "${target.name}" activado con éxito. Podés seguir configurando o presionar [Esc] para cerrar.`;
-          } else {
-            feedbackMessage = `Error al activar perfil: ${res.message ?? "desconocido"}`;
-          }
+          activatingProfile = target;
+          chooseScopeIndex = 0;
+          feedbackMessage = null;
+          view = "choose-scope";
+        }
+      } else if (key === "p") {
+        const target = selectedProfile();
+        if (target) {
+          activatingProfile = target;
+          executeActivation("project");
         }
       } else if (key === "n") {
         // Create new profile
@@ -1119,6 +1234,13 @@ export function createSddProfilesModal(input: ModalInput) {
 
           if (target.type === "item" && target.index !== undefined) {
             const itemIdx = target.index;
+            if (view === "choose-scope") {
+              chooseScopeIndex = itemIdx;
+              const scope = chooseScopeIndex === 0 ? "project" : "global";
+              executeActivation(scope);
+              return { handled: true, render: true };
+            }
+
             if (view === "profiles-list") {
               if (itemIdx === selectedProfileIndex || clickCount === 2) {
                 selectedProfileIndex = itemIdx;

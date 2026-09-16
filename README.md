@@ -171,6 +171,9 @@ Al asignar un modelo a cualquier agente o categoría, se abre la lista flotante 
 |---|---|
 | `/sdd-profile` | Abre el selector interactivo nativo en terminal. Incluye la opción para crear nuevos perfiles. |
 | `/sdd-profile apply <nombre>` | Activa directamente un perfil por su nombre. Agregá `--project` para aplicarlo solo localmente. |
+| `/sdd-profile shortcut [disable-alt\|enable-alt\|set\|reset]` | Inspecciona o personaliza los atajos de teclado para evitar conflictos con otras extensiones. |
+| `/sdd-profile unset [--global]` | Elimina el override de perfil activo local del proyecto (o global con `--global`), volviendo a heredar la configuración base. |
+| `/sdd-profile clear-local` | Alias equivalente a `unset`, limpia el perfil activo local del proyecto. |
 | `/sdd-profile create <nombre> [modelo] [effort]` | Crea un nuevo perfil. Si omitís los argumentos, inicia el asistente guiado. |
 | `/sdd-profile save <nombre> [desc]` | Captura la configuración actual de `subagents.json` y la guarda como un nuevo perfil reutilizable. |
 | `/sdd-profile set <perfil> <agente> <modelo> [effort]` | Asigna o modifica el modelo de un agente específico dentro de un perfil. |
@@ -179,9 +182,33 @@ Al asignar un modelo a cualquier agente o categoría, se abre la lista flotante 
 | `/sdd-profile rename <nombre> <nuevo>` | Renombra un perfil personalizado existente y actualiza el puntero activo si estaba seleccionado. |
 | `/sdd-profile delete <nombre>` | Elimina un perfil personalizado creado por el usuario. |
 
-### Atajos de teclado
-- `Alt + M` o `Ctrl + Shift + M`: Abre de inmediato el menú selector de perfiles.
+### Atajos de teclado y Personalización
+- **`Ctrl + Shift + M`**: Atajo principal universal (recomendado, sin colisiones en Linux, macOS y Windows).
+- **`Alt + M`**: Atajo alternativo rápido (compatible con instalaciones estándar).
 - `/sdd-profile`: Comando equivalente para abrir la interfaz desde cualquier entorno o terminal.
+
+#### 🔧 Evitar conflictos con otras extensiones (ej. `pi-intercom`)
+Si utilizás extensiones como `pi-intercom` que también reclaman `Alt + M`, podés desactivar fácilmente el registro de `Alt + M` para dejar libre ese atajo:
+- Desde la terminal de Pi:
+  ```bash
+  /sdd-profile shortcut disable-alt
+  ```
+- O configurándolo directamente en tu `~/.pi/agent/settings.json` (o `.pi/settings.json`):
+  ```json
+  {
+    "sddProfiles": {
+      "disableAltShortcut": true
+    }
+  }
+  ```
+  O definiendo tus atajos personalizados:
+  ```json
+  {
+    "sddProfiles": {
+      "shortcuts": ["ctrl+shift+m", "alt+o"]
+    }
+  }
+  ```
 
 > 💡 **Nota para usuarios de macOS:**
 > En macOS, por defecto terminales como Terminal.app o iTerm2 utilizan la tecla `Option` para componer caracteres tipográficos especiales (por ejemplo, `Option + M` emite el caracter `µ`).

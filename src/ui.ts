@@ -96,9 +96,11 @@ export function formatProfileList(profiles: ProfileSummary[], activeName: string
   ];
 
   for (const p of profiles) {
-    const activeBadge = p.is_active || (activeName && p.name.toLowerCase() === activeName.toLowerCase())
-      ? " [ACTIVO] 🟢"
-      : "";
+    let activeBadge = "";
+    if (p.is_active || (activeName && p.name.toLowerCase() === activeName.toLowerCase())) {
+      const scopeStr = p.active_scope ? ` (${p.active_scope})` : "";
+      activeBadge = ` [ACTIVO${scopeStr}] 🟢`;
+    }
     const scopeBadge = `(${p.scope})`;
     const defaultModel = p.default_model ? ` → ${p.default_model}` : "";
     const desc = p.description ? `\n   _${p.description}_` : "";
@@ -541,7 +543,17 @@ export async function runInteractiveProfileSelect(
   if (!match) return undefined;
 
   const profileName = match[1];
-  const result = manager.activateProfile(profileName);
+  let scopeToApply: "global" | "project" = "global";
+  if (ctx.ui?.select) {
+    const scopeChoice = await ctx.ui.select(`¿Dónde querés activar "${profileName}"?`, [
+      "Solo en este proyecto (.pi/subagents.json)",
+      "Global para toda la máquina (~/.pi/agent/subagents.json)",
+    ]);
+    if (!scopeChoice) return undefined;
+    scopeToApply = scopeChoice.startsWith("Solo") ? "project" : "global";
+  }
+
+  const result = manager.activateProfile(profileName, scopeToApply);
 
   if (result.success) {
     if (result.profile && ctx.onProfileActivated) {
