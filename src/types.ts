@@ -79,6 +79,7 @@ export interface ProfileSummary {
   agent_count: number;
   scope: ProfileScope;
   is_active: boolean;
+  active_scope?: "project" | "global";
   path?: string;
 }
 

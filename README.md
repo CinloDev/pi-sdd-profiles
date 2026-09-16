@@ -171,6 +171,8 @@ Al asignar un modelo a cualquier agente o categoría, se abre la lista flotante 
 |---|---|
 | `/sdd-profile` | Abre el selector interactivo nativo en terminal. Incluye la opción para crear nuevos perfiles. |
 | `/sdd-profile apply <nombre>` | Activa directamente un perfil por su nombre. Agregá `--project` para aplicarlo solo localmente. |
+| `/sdd-profile unset [--global]` | Elimina el override de perfil activo local del proyecto (o global con `--global`), volviendo a heredar la configuración base. |
+| `/sdd-profile clear-local` | Alias equivalente a `unset`, limpia el perfil activo local del proyecto. |
 | `/sdd-profile create <nombre> [modelo] [effort]` | Crea un nuevo perfil. Si omitís los argumentos, inicia el asistente guiado. |
 | `/sdd-profile save <nombre> [desc]` | Captura la configuración actual de `subagents.json` y la guarda como un nuevo perfil reutilizable. |
 | `/sdd-profile set <perfil> <agente> <modelo> [effort]` | Asigna o modifica el modelo de un agente específico dentro de un perfil. |

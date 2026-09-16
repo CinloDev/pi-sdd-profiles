@@ -39,8 +39,12 @@ export class SddProfileManager {
     return this.storage.loadProfile(name);
   }
 
-  getActiveProfileName(): string | null {
-    return this.storage.getActiveProfileName();
+  getActiveProfileName(scope?: "effective" | "project" | "global"): string | null {
+    return this.storage.getActiveProfileName(scope);
+  }
+
+  getActiveScope(): "project" | "global" | null {
+    return this.storage.getActiveScope();
   }
 
   /**
@@ -62,7 +66,7 @@ export class SddProfileManager {
       target === "project" ? this.projectSubagentsPath : this.globalSubagentsPath;
 
     applyProfileToFile(targetPath, profile);
-    this.storage.setActiveProfileName(profile.name);
+    this.storage.setActiveProfileName(profile.name, target);
 
     return {
       success: true,
@@ -72,35 +76,60 @@ export class SddProfileManager {
   }
 
   /**
+   * Clears the active profile assignment for the specified scope.
+   */
+  clearActiveProfile(scope: "project" | "global" | "both" = "project"): {
+    success: boolean;
+    message: string;
+  } {
+    this.storage.clearActiveProfileName(scope);
+    return {
+      success: true,
+      message: `Perfil activo de ${scope} limpiado correctamente.`,
+    };
+  }
+
+  /**
    * Reaffirms the active profile against global and/or project subagents.json.
    * If model_profiles or defaults diverge from the active profile, they are restored atomically.
+   * Global subagents.json reconciles against the global active profile.
+   * Project subagents.json reconciles against the project active profile.
    */
   reaffirmActiveProfile(target: "global" | "project" | "both" = "both"): {
     globalUpdated: boolean;
     projectUpdated: boolean;
   } {
-    const activeName = this.getActiveProfileName();
-    if (!activeName) {
-      return { globalUpdated: false, projectUpdated: false };
-    }
-
-    const profile = this.getProfile(activeName);
-    if (!profile) {
-      return { globalUpdated: false, projectUpdated: false };
-    }
-
     let globalUpdated = false;
     let projectUpdated = false;
 
     if (target === "global" || target === "both") {
-      const res = reconcileProfileWithFile(this.globalSubagentsPath, profile);
-      globalUpdated = res.updated;
+      const globalActive = this.getActiveProfileName("global");
+      if (globalActive) {
+        const profile = this.getProfile(globalActive);
+        if (profile) {
+          const res = reconcileProfileWithFile(this.globalSubagentsPath, profile);
+          globalUpdated = res.updated;
+        }
+      }
     }
 
     if (target === "project" || target === "both") {
-      if (fs.existsSync(this.projectSubagentsPath) || target === "project") {
-        const res = reconcileProfileWithFile(this.projectSubagentsPath, profile);
-        projectUpdated = res.updated;
+      const projectActive = this.getActiveProfileName("project");
+      if (projectActive) {
+        const profile = this.getProfile(projectActive);
+        if (profile) {
+          const res = reconcileProfileWithFile(this.projectSubagentsPath, profile);
+          projectUpdated = res.updated;
+        }
+      } else if (target === "project") {
+        const effectiveActive = this.getActiveProfileName("effective");
+        if (effectiveActive && fs.existsSync(this.projectSubagentsPath)) {
+          const profile = this.getProfile(effectiveActive);
+          if (profile) {
+            const res = reconcileProfileWithFile(this.projectSubagentsPath, profile);
+            projectUpdated = res.updated;
+          }
+        }
       }
     }
 

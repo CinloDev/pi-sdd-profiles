@@ -76,19 +76,45 @@ describe("modal overlay component", () => {
 
     // Press down in Application Cursor / SS3 mode (\u001bOB) to select deep-reasoning
     modal.handleInput("\u001bOB"); // down in SS3 mode
-    // Press enter to activate
+    // Press enter to open scope selection dialog
     modal.handleInput("\r"); // enter
+
+    const scopeLines = modal.render(80);
+    expect(scopeLines.join("\n")).toContain("Seleccionar Alcance");
+    expect(scopeLines.join("\n")).toContain("Solo en este proyecto");
+    expect(scopeLines.join("\n")).toContain("Global para toda la máquina");
+
+    // Press '2' to activate globally
+    modal.handleInput("2");
 
     expect(mockManager.activateProfile).toHaveBeenCalledWith("deep-reasoning", "global");
     expect(onProfileActivated).toHaveBeenCalledWith(mockProfileDetails);
     // Modal stays open with feedback message!
     expect(done).not.toHaveBeenCalled();
     const lines = modal.render(80);
-    expect(lines.join("\n")).toContain("activado con éxito");
+    expect(lines.join("\n")).toContain("activado");
 
     // User can close with Esc when ready
     modal.handleInput("\u001b");
     expect(done).toHaveBeenCalledWith({ action: "closed" });
+  });
+
+  it("should activate for project scope when selecting option 1 in scope dialog", () => {
+    const done = vi.fn();
+    const onProfileActivated = vi.fn();
+    const modal = createSddProfilesModal({
+      manager: mockManager,
+      availableModels,
+      onProfileActivated,
+      done,
+    });
+
+    modal.handleInput("\u001bOB"); // select deep-reasoning
+    modal.handleInput("\r"); // open scope dialog
+    modal.handleInput("1"); // select option 1 (project)
+
+    expect(mockManager.activateProfile).toHaveBeenCalledWith("deep-reasoning", "project");
+    expect(onProfileActivated).toHaveBeenCalledWith(mockProfileDetails);
   });
 
   it("should filter models in model picker as user types and select matching model", () => {
@@ -486,7 +512,7 @@ describe("modal overlay component", () => {
       expect(updatedLines.join("\n")).toMatch(/›\s+.*deep-reasoning/);
       expect(mockManager.activateProfile).not.toHaveBeenCalled();
 
-      // Double click on deep-reasoning row
+      // Double click on deep-reasoning row opens scope selection dialog
       const doubleClickRes = (modal as any).handleMouse({
         type: "click",
         button: "left",
@@ -503,6 +529,11 @@ describe("modal overlay component", () => {
       });
 
       expect(doubleClickRes?.handled).toBe(true);
+      const scopeLines = modal.render(80);
+      expect(scopeLines.join("\n")).toContain("Seleccionar Alcance");
+
+      // Press 2 to activate globally
+      modal.handleInput("2");
       expect(mockManager.activateProfile).toHaveBeenCalledWith("deep-reasoning", "global");
       expect(onProfileActivated).toHaveBeenCalled();
     });
