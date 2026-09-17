@@ -230,23 +230,10 @@ export function createSddProfilesModal(input: ModalInput) {
     const fullProfile = manager.getProfile(profSummary.name);
     if (!fullProfile) return;
 
-    if (pickerTarget === "default-model" || selectedAgent() === ORCHESTRATOR_AGENT_KEY) {
-      fullProfile.default_model = chosenModel;
-      if (effortVal !== undefined) fullProfile.default_effort = effortVal;
-    } else if (pickerTarget === "all-models") {
-      fullProfile.default_model = chosenModel;
-      if (effortVal !== undefined) fullProfile.default_effort = effortVal;
-      for (const ag of ALL_KNOWN_AGENTS) {
-        const eff = effortVal !== undefined ? effortVal : fullProfile.model_profiles[ag]?.effort;
-        fullProfile.model_profiles[ag] = {
-          model: chosenModel,
-          ...(eff ? { effort: eff } : {}),
-        };
-      }
-      pickerTarget = "agent-model";
-    } else if (pickerTarget === "category-models" && targetCategory) {
-      const cat = SDD_AGENT_CATEGORIES.find((c) => c.name === targetCategory);
+    if (pickerTarget === "category-models" && targetCategory) {
+      const cat = SDD_AGENT_CATEGORIES.find((c) => c.name === targetCategory || c.id === targetCategory);
       if (cat) {
+        if (!fullProfile.model_profiles) fullProfile.model_profiles = {};
         for (const ag of cat.agents) {
           const eff = effortVal !== undefined ? effortVal : fullProfile.model_profiles[ag]?.effort;
           fullProfile.model_profiles[ag] = {
@@ -257,9 +244,25 @@ export function createSddProfilesModal(input: ModalInput) {
       }
       targetCategory = undefined;
       pickerTarget = "agent-model";
+    } else if (pickerTarget === "all-models") {
+      fullProfile.default_model = chosenModel;
+      if (effortVal !== undefined) fullProfile.default_effort = effortVal;
+      if (!fullProfile.model_profiles) fullProfile.model_profiles = {};
+      for (const ag of ALL_KNOWN_AGENTS) {
+        const eff = effortVal !== undefined ? effortVal : fullProfile.model_profiles[ag]?.effort;
+        fullProfile.model_profiles[ag] = {
+          model: chosenModel,
+          ...(eff ? { effort: eff } : {}),
+        };
+      }
+      pickerTarget = "agent-model";
+    } else if (pickerTarget === "default-model" || (pickerTarget === "agent-model" && selectedAgent() === ORCHESTRATOR_AGENT_KEY)) {
+      fullProfile.default_model = chosenModel;
+      if (effortVal !== undefined) fullProfile.default_effort = effortVal;
     } else {
       const ag = selectedAgent();
       const eff = effortVal !== undefined ? effortVal : fullProfile.model_profiles[ag]?.effort;
+      if (!fullProfile.model_profiles) fullProfile.model_profiles = {};
       fullProfile.model_profiles[ag] = {
         model: chosenModel,
         ...(eff ? { effort: eff } : {}),
@@ -268,6 +271,7 @@ export function createSddProfilesModal(input: ModalInput) {
 
     manager.createProfile(fullProfile);
     refreshProfiles();
+    syncEditingProfile();
     if (activeProfileName && profSummary.name.toLowerCase() === activeProfileName.toLowerCase()) {
       onProfileActivated?.(fullProfile);
     }
@@ -1011,6 +1015,16 @@ export function createSddProfilesModal(input: ModalInput) {
     render(width: number): string[] {
       clickTargets = [];
       currentBodyStartY = width < 30 ? 1 : 2;
+
+      // Register global top-right [ x ] close button
+      clickTargets.push({
+        y: 0,
+        type: "action",
+        key: "close",
+        xStart: Math.max(0, width - 9),
+        xEnd: width,
+      });
+
       if (view === "choose-scope") return constrainLines(renderChooseScope(width), width);
       if (view === "create-profile") return constrainLines(renderCreateProfile(width), width);
       if (view === "rename-profile") return constrainLines(renderRenameProfile(width), width);
@@ -1025,11 +1039,20 @@ export function createSddProfilesModal(input: ModalInput) {
     handleInput(data: string): void {
       const key = normalizeModalKey(data);
 
+      // Instant global close via [ x ] action or Ctrl+Q
+      if (key === "close" || key === "ctrl+q") {
+        done({ action: "closed" });
+        return;
+      }
+
       // --- Sub-View: Choose Scope ---
       if (view === "choose-scope") {
         if (key === "esc") {
           view = "profiles-list";
           activatingProfile = null;
+        } else if (key === "q") {
+          done({ action: "closed" });
+          return;
         } else if (key === "up" || key === "k") {
           chooseScopeIndex = Math.max(0, chooseScopeIndex - 1);
         } else if (key === "down" || key === "j") {
@@ -1195,110 +1218,31 @@ export function createSddProfilesModal(input: ModalInput) {
 
       // --- Sub-View: Effort Picker ---
       if (view === "effort-picker") {
-        if (key === "esc" || key === "q") {
+        if (key === "q") {
+          done({ action: "closed" });
+          return;
+        }
+        if (key === "esc") {
           // If a model was staged, apply it without altering effort
-          if (stagedModel && editingProfile) {
-            isDirty = true;
-            if (pickerTarget === "default-model" || selectedAgent() === ORCHESTRATOR_AGENT_KEY) {
-              editingProfile.default_model = stagedModel;
-            } else if (pickerTarget === "all-models") {
-              editingProfile.default_model = stagedModel;
-              for (const ag of ALL_KNOWN_AGENTS) {
-                editingProfile.model_profiles[ag] = {
-                  model: stagedModel,
-                  effort: editingProfile.model_profiles[ag]?.effort,
-                };
-              }
-            } else if (pickerTarget === "category-models" && targetCategory) {
-              const cat = SDD_AGENT_CATEGORIES.find((c) => c.name === targetCategory);
-              if (cat) {
-                for (const ag of cat.agents) {
-                  editingProfile.model_profiles[ag] = {
-                    model: stagedModel,
-                    effort: editingProfile.model_profiles[ag]?.effort,
-                  };
-                }
-              }
-            } else {
-              const currentAgent = selectedAgent();
-              editingProfile.model_profiles[currentAgent] = {
-                model: stagedModel,
-                effort: editingProfile.model_profiles[currentAgent]?.effort,
-              };
-            }
+          if (stagedModel) {
+            applyModelOption(stagedModel);
           }
           stagedModel = undefined;
-          view = "profile-editor";
+          view = "profiles-list";
         } else if (key === "up" || key === "k") {
           pickerIndex = Math.max(0, pickerIndex - 1);
         } else if (key === "down" || key === "j") {
           pickerIndex = Math.min(EFFORT_OPTIONS.length - 1, pickerIndex + 1);
         } else if (key === "enter") {
           const chosen = EFFORT_OPTIONS[pickerIndex];
-          if (editingProfile) {
-            isDirty = true;
-            const effortVal = chosen === "default" ? undefined : chosen;
-
-            if (pickerTarget === "default-model" || selectedAgent() === ORCHESTRATOR_AGENT_KEY) {
-              if (stagedModel) editingProfile.default_model = stagedModel;
-              if (effortVal !== undefined) {
-                editingProfile.default_effort = effortVal;
-              } else {
-                delete editingProfile.default_effort;
-              }
-            } else if (pickerTarget === "all-models") {
-              if (stagedModel) editingProfile.default_model = stagedModel;
-              for (const ag of ALL_KNOWN_AGENTS) {
-                const entryModel = stagedModel ?? editingProfile.model_profiles[ag]?.model ?? editingProfile.default_model ?? "default";
-                if (effortVal !== undefined) {
-                  editingProfile.model_profiles[ag] = {
-                    model: entryModel,
-                    effort: effortVal,
-                  };
-                } else {
-                  editingProfile.model_profiles[ag] = {
-                    model: entryModel,
-                  };
-                }
-              }
-            } else if (pickerTarget === "category-models" && targetCategory) {
-              const cat = SDD_AGENT_CATEGORIES.find((c) => c.name === targetCategory);
-              if (cat) {
-                for (const ag of cat.agents) {
-                  const entryModel = stagedModel ?? editingProfile.model_profiles[ag]?.model ?? editingProfile.default_model ?? "default";
-                  if (effortVal !== undefined) {
-                    editingProfile.model_profiles[ag] = {
-                      model: entryModel,
-                      effort: effortVal,
-                    };
-                  } else {
-                    editingProfile.model_profiles[ag] = {
-                      model: entryModel,
-                    };
-                  }
-                }
-              }
-            } else {
-              const currentAgent = selectedAgent();
-              const currentModel =
-                stagedModel ??
-                editingProfile.model_profiles[currentAgent]?.model ??
-                editingProfile.default_model ??
-                "default";
-              if (effortVal !== undefined) {
-                editingProfile.model_profiles[currentAgent] = {
-                  model: currentModel,
-                  effort: effortVal,
-                };
-              } else {
-                editingProfile.model_profiles[currentAgent] = {
-                  model: currentModel,
-                };
-              }
-            }
+          const effortVal = chosen === "default" ? undefined : chosen;
+          if (stagedModel) {
+            applyModelOption(stagedModel, effortVal);
+          } else {
+            applyEffortOption(chosen);
           }
           stagedModel = undefined;
-          view = "profile-editor";
+          view = "profiles-list";
         }
         requestRender();
         return;
@@ -1552,14 +1496,18 @@ export function createSddProfilesModal(input: ModalInput) {
         return;
       }
 
-      // Close modal with Esc or q from profiles pane
-      if (key === "esc" || key === "q") {
+      // Close modal with Esc (step-back) or q (instant close)
+      if (key === "esc") {
         if (view === "profile-editor" || activePane !== "profiles") {
           view = "profiles-list";
           activePane = "profiles";
           requestRender();
           return;
         }
+        done({ action: "closed" });
+        return;
+      }
+      if (key === "q") {
         done({ action: "closed" });
         return;
       }
@@ -1610,6 +1558,14 @@ export function createSddProfilesModal(input: ModalInput) {
 
       if (event.type === "click" && event.button === "left") {
         const { x, y, clickCount = 1 } = event;
+        const modalWidth = event.width || 80;
+
+        // Instant top-right [ x ] close button click
+        if (y === 0 && x >= modalWidth - 9) {
+          done({ action: "closed" });
+          return { handled: true, render: true };
+        }
+
         const target = clickTargets.find((t) => {
           if (t.y !== y) return false;
           if (t.type === "action") {
