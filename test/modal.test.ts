@@ -948,5 +948,111 @@ describe("modal overlay component", () => {
         })
       );
     });
+
+    it("should render [ x ] button at top right and close immediately when clicked", () => {
+      const done = vi.fn();
+      const modal = createSddProfilesModal({
+        manager: mockManager,
+        availableModels,
+        done,
+      });
+
+      const lines = modal.render(80);
+      // Top line should contain [ x ]
+      expect(lines[0]).toContain("[ x ]");
+
+      // Click on [ x ] at top right (y: 0, x: 75 on width 80)
+      const clickRes = (modal as any).handleMouse({
+        type: "click",
+        button: "left",
+        x: 75,
+        y: 0,
+        screenX: 75,
+        screenY: 0,
+        width: 80,
+        height: lines.length,
+        shift: false,
+        alt: false,
+        ctrl: false,
+        clickCount: 1,
+      });
+
+      expect(clickRes?.handled).toBe(true);
+      expect(done).toHaveBeenCalledWith({ action: "closed" });
+    });
+
+    it("should close immediately on 'q' without requiring multiple Esc presses", () => {
+      const done = vi.fn();
+      const modal = createSddProfilesModal({
+        manager: mockManager,
+        availableModels,
+        done,
+      });
+
+      // Switch to Agentes panel
+      modal.handleInput("\t");
+      let lines = modal.render(80);
+      expect(lines.join("\n")).toContain("Panel activo: Agentes");
+
+      // Press 'q' -> closes immediately!
+      modal.handleInput("q");
+      expect(done).toHaveBeenCalledWith({ action: "closed" });
+    });
+
+    it("should assign model and persist to all agents in a category when using category picker", () => {
+      const done = vi.fn();
+      const customProfile = {
+        name: "test-cat-profile",
+        default_model: "openai/o3-mini",
+        default_effort: "high" as const,
+        model_profiles: {},
+      };
+      const customManager: any = {
+        listProfiles: vi.fn(() => [{ name: "test-cat-profile", is_active: true }]),
+        getActiveProfileName: vi.fn(() => "test-cat-profile"),
+        getProfile: vi.fn(() => ({ ...customProfile, model_profiles: { ...customProfile.model_profiles } })),
+        createProfile: vi.fn(() => ({ success: true })),
+      };
+      const modal = createSddProfilesModal({
+        manager: customManager,
+        availableModels: [
+          "anthropic/claude-sonnet-4-5",
+          "openai/gpt-4o",
+        ],
+        done,
+      });
+
+      // Press 'c' to open category picker
+      modal.handleInput("c");
+      let lines = modal.render(80);
+      expect(lines.join("\n")).toContain("Elegir Categoría");
+      expect(lines.join("\n")).toContain("Núcleo SDD");
+
+      // Row 0 is Orchestrator, Row 1 is Núcleo SDD
+      modal.handleInput("\u001b[B"); // Move to Núcleo SDD
+      modal.handleInput("\r"); // Enter -> opens model picker for Núcleo SDD
+
+      lines = modal.render(80);
+      expect(lines.join("\n")).toContain("Categoría: Núcleo SDD");
+
+      // Select first model (anthropic/claude-sonnet-4-5)
+      modal.handleInput("\r"); // Enter -> opens effort picker
+      lines = modal.render(100);
+      expect(lines.join("\n")).toContain("Categoría: Núcleo SDD");
+
+      // Select default effort
+      modal.handleInput("\r"); // Enter -> confirms and saves!
+
+      // Verify createProfile was called with updated agents in Núcleo SDD
+      expect(customManager.createProfile).toHaveBeenCalledWith(
+        expect.objectContaining({
+          model_profiles: expect.objectContaining({
+            "sdd-explore": expect.objectContaining({ model: "anthropic/claude-sonnet-4-5" }),
+            "sdd-apply": expect.objectContaining({ model: "anthropic/claude-sonnet-4-5" }),
+            "sdd-verify": expect.objectContaining({ model: "anthropic/claude-sonnet-4-5" }),
+          }),
+        })
+      );
+    });
   });
 });
