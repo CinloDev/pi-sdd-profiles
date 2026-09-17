@@ -13,9 +13,59 @@ export function constrainLines(lines: string[], width: number): string[] {
   return lines.map((line) => truncateToWidth(line, safeWidth));
 }
 
+export interface ColumnWidths {
+  col1: number;
+  col2: number;
+  col3: number;
+}
+
+export function computeThreeColumnWidths(contentWidth: number): ColumnWidths {
+  // 2 vertical dividers of 1 char each
+  const available = Math.max(15, contentWidth - 2);
+
+  // Col 1 (Profiles) needs 18 chars ("  ○ deep-reasoning" is 18 chars)
+  const col1 = Math.max(18, Math.min(22, Math.floor(available * 0.25)));
+  // Col 3 (Effort) needs 18 chars ("Effort / Thinking" is 17 chars)
+  const col3 = Math.max(18, Math.min(20, Math.floor(available * 0.23)));
+  // Col 2 (Agents & Models) takes the remainder
+  const col2 = Math.max(10, available - col1 - col3);
+
+  return { col1, col2, col3 };
+}
+
+export function renderThreeColumns(
+  col1Lines: string[],
+  col2Lines: string[],
+  col3Lines: string[],
+  widths: ColumnWidths,
+  divider: string = "│"
+): string[] {
+  const maxRows = Math.max(col1Lines.length, col2Lines.length, col3Lines.length);
+  const rows: string[] = [];
+
+  for (let i = 0; i < maxRows; i++) {
+    const c1 = padToVisibleWidth(col1Lines[i] ?? "", widths.col1);
+    const c2 = padToVisibleWidth(col2Lines[i] ?? "", widths.col2);
+    const c3 = padToVisibleWidth(col3Lines[i] ?? "", widths.col3);
+    rows.push(`${c1}${divider}${c2}${divider}${c3}`);
+  }
+
+  return rows;
+}
+
+export function renderColumnHeaderDivider(
+  widths: ColumnWidths,
+  lineChar: string = "─",
+  junctionChar: string = "┼"
+): string {
+  return `${lineChar.repeat(widths.col1)}${junctionChar}${lineChar.repeat(widths.col2)}${junctionChar}${lineChar.repeat(widths.col3)}`;
+}
+
 export interface FrameModalOptions {
   paddingX?: number;
   paddingY?: number;
+  paddingTop?: number;
+  paddingBottom?: number;
 }
 
 export function frameModal(
@@ -29,7 +79,8 @@ export function frameModal(
   if (safeWidth < 30) return constrainLines([title, ...body], safeWidth);
 
   const paddingX = options.paddingX ?? 2;
-  const paddingY = options.paddingY ?? 1;
+  const paddingTop = options.paddingTop ?? options.paddingY ?? 1;
+  const paddingBottom = options.paddingBottom ?? options.paddingY ?? 1;
 
   const innerWidth = safeWidth - 2;
   const contentWidth = Math.max(1, innerWidth - (paddingX * 2));
@@ -77,8 +128,8 @@ export function frameModal(
     return renderRow(`${padLeft}${padded}${padRight}`);
   });
 
-  const verticalTop = Array(paddingY).fill(emptyLine);
-  const verticalBottom = Array(paddingY).fill(emptyLine);
+  const verticalTop = Array(paddingTop).fill(emptyLine);
+  const verticalBottom = Array(paddingBottom).fill(emptyLine);
 
   return [top, ...verticalTop, ...rows, ...verticalBottom, bottom];
 }
@@ -142,6 +193,12 @@ export function normalizeModalKey(data: string): string {
   }
   if (matchesKey(data, Key.backspace) || data === "\u007f" || data === "\b") {
     return "backspace";
+  }
+  if (matchesKey(data, Key.tab) || data === "\t") {
+    return "tab";
+  }
+  if (data === "\u001b[Z") {
+    return "backtab";
   }
   return data;
 }

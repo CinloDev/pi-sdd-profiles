@@ -803,4 +803,150 @@ describe("modal overlay component", () => {
       expect(mockManager.deleteProfile).toHaveBeenCalledWith("cin");
     });
   });
+
+  describe("three-column miller layout and panel navigation", () => {
+    it("should render all three columns simultaneously with vertical dividers in main view", () => {
+      const done = vi.fn();
+      const modal = createSddProfilesModal({
+        manager: mockManager,
+        availableModels,
+        done,
+      });
+
+      const lines = modal.render(100);
+      const content = lines.join("\n");
+
+      // Column 1
+      expect(content).toContain("Perfiles");
+      expect(content).toContain("cin");
+      // Column 2
+      expect(content).toContain("Agentes");
+      expect(content).toContain("Orquestador");
+      // Column 3
+      expect(content).toContain("Effort / Thinking");
+      expect(content).toContain("default");
+      expect(content).toContain("high");
+
+      // Dividers
+      expect(content).toContain("│");
+      expect(content).toContain("┼");
+    });
+
+    it("should cycle focus between panels with Tab, Shift-Tab, and Arrow keys", () => {
+      const done = vi.fn();
+      const modal = createSddProfilesModal({
+        manager: mockManager,
+        availableModels,
+        done,
+      });
+
+      let lines = modal.render(100);
+      expect(lines.join("\n")).toContain("Panel activo: Perfiles");
+
+      // Press Tab -> switch to Agentes
+      modal.handleInput("\t");
+      lines = modal.render(100);
+      expect(lines.join("\n")).toContain("Panel activo: Agentes");
+
+      // Press Tab -> switch to Effort
+      modal.handleInput("\t");
+      lines = modal.render(100);
+      expect(lines.join("\n")).toContain("Panel activo: Effort / Thinking");
+
+      // Press Tab -> wrap back to Perfiles
+      modal.handleInput("\t");
+      lines = modal.render(100);
+      expect(lines.join("\n")).toContain("Panel activo: Perfiles");
+
+      // Press Left arrow from Profiles (stays in Profiles)
+      modal.handleInput("\u001b[D"); // Left
+      lines = modal.render(100);
+      expect(lines.join("\n")).toContain("Panel activo: Perfiles");
+
+      // Press Right arrow -> moves to Agentes
+      modal.handleInput("\u001b[C"); // Right
+      lines = modal.render(100);
+      expect(lines.join("\n")).toContain("Panel activo: Agentes");
+
+      // Press Right arrow -> moves to Effort
+      modal.handleInput("\u001b[C"); // Right
+      lines = modal.render(100);
+      expect(lines.join("\n")).toContain("Panel activo: Effort / Thinking");
+
+      // Press Shift+Tab (backtab) -> moves back to Agentes
+      modal.handleInput("\u001b[Z"); // Backtab
+      lines = modal.render(100);
+      expect(lines.join("\n")).toContain("Panel activo: Agentes");
+    });
+
+    it("should apply and persist effort directly from Column 3 using keyboard", () => {
+      const done = vi.fn();
+      const modal = createSddProfilesModal({
+        manager: mockManager,
+        availableModels,
+        done,
+      });
+
+      // Switch to Effort pane via Tab twice
+      modal.handleInput("\t");
+      modal.handleInput("\t");
+      let lines = modal.render(100);
+      expect(lines.join("\n")).toContain("Panel activo: Effort / Thinking");
+
+      // Move down in effort options (0: default, 1: off, 2: minimal, 3: low, 4: medium, 5: high, 6: xhigh, 7: max)
+      // Navigate to 'low' (down 3 times)
+      modal.handleInput("\u001b[B");
+      modal.handleInput("\u001b[B");
+      modal.handleInput("\u001b[B");
+
+      // Press Enter to apply
+      modal.handleInput("\r");
+
+      expect(mockManager.createProfile).toHaveBeenCalledWith(
+        expect.objectContaining({
+          default_effort: "low",
+        })
+      );
+
+      lines = modal.render(100);
+      expect(lines.join("\n")).toContain("guardado");
+    });
+
+    it("should allow single click on Effort column to select and apply immediately", () => {
+      const done = vi.fn();
+      const modal = createSddProfilesModal({
+        manager: mockManager,
+        availableModels,
+        done,
+      });
+
+      const lines = modal.render(100);
+      // Find row containing "medium"
+      const mediumRow = lines.findIndex((l) => l.includes("medium") && l.includes("│"));
+      expect(mediumRow).toBeGreaterThan(0);
+
+      // Col 3 starts after Col 2 (~ x=75 on width 100)
+      const clickRes = (modal as any).handleMouse({
+        type: "click",
+        button: "left",
+        x: 82,
+        y: mediumRow,
+        screenX: 82,
+        screenY: mediumRow,
+        width: 100,
+        height: lines.length,
+        shift: false,
+        alt: false,
+        ctrl: false,
+        clickCount: 1,
+      });
+
+      expect(clickRes?.handled).toBe(true);
+      expect(mockManager.createProfile).toHaveBeenCalledWith(
+        expect.objectContaining({
+          default_effort: "medium",
+        })
+      );
+    });
+  });
 });
