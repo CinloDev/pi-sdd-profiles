@@ -1,4 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import * as fs from "node:fs";
+import * as path from "node:path";
+import * as os from "node:os";
 import { createSddProfilesModal } from "../src/modal.js";
 
 describe("modal overlay component", () => {
@@ -1080,6 +1083,353 @@ describe("modal overlay component", () => {
       lines = modal.render(100);
       expect(lines.join("\n")).toContain("▼ 📦 Núcleo SDD");
       expect(lines.join("\n")).toContain("sdd-explore");
+    });
+  });
+
+  describe("dynamic reasoning effort options per model", () => {
+    it("should show only 'default' and hint for non-reasoning models like gpt-4o in Col 3 and effort picker", () => {
+      const done = vi.fn();
+      const customProfile = {
+        name: "test-non-reasoning",
+        default_model: "openai/gpt-4o",
+        model_profiles: {},
+      };
+      const customManager: any = {
+        listProfiles: vi.fn(() => [{ name: "test-non-reasoning", is_active: true }]),
+        getActiveProfileName: vi.fn(() => "test-non-reasoning"),
+        getProfile: vi.fn(() => ({ ...customProfile, model_profiles: { ...customProfile.model_profiles } })),
+        createProfile: vi.fn(() => ({ success: true })),
+      };
+
+      const modelsMetadata = {
+        "openai/gpt-4o": {
+          id: "openai/gpt-4o",
+          provider: "openai",
+          reasoning: false,
+        },
+      };
+
+      const modal = createSddProfilesModal({
+        manager: customManager,
+        availableModels: ["openai/gpt-4o"],
+        modelsMetadata,
+        done,
+      });
+
+      // Render 3 columns (width 120)
+      let lines = modal.render(120);
+      let content = lines.join("\n");
+      // Col 3 should show default and sin razonamiento hint
+      expect(content).toContain("default");
+      expect(content).toContain("(sin razonamiento)");
+      // Should NOT contain reasoning options like high, minimal, max
+      expect(content).not.toContain("xhigh");
+      expect(content).not.toContain("minimal");
+
+      // Now open model picker on orchestrator and select gpt-4o
+      modal.handleInput("m");
+      modal.handleInput("\r"); // Enter -> opens effort-picker
+
+      lines = modal.render(120);
+      content = lines.join("\n");
+      expect(content).toContain("este modelo no utiliza niveles de razonamiento");
+      expect(content).not.toContain("xhigh");
+      expect(content).not.toContain("máxima profundidad");
+
+      // Pressing down shouldn't crash or advance beyond 0
+      modal.handleInput("\u001b[B"); // down
+      modal.handleInput("\r"); // Enter confirms default
+
+      expect(customManager.createProfile).toHaveBeenCalled();
+    });
+
+    it("should dynamically filter options in Col 3 according to thinkingLevelMap", () => {
+      const done = vi.fn();
+      const customProfile = {
+        name: "test-custom-reasoner",
+        default_model: "cliproxyapi/custom-reasoner",
+        model_profiles: {},
+      };
+      const customManager: any = {
+        listProfiles: vi.fn(() => [{ name: "test-custom-reasoner", is_active: true }]),
+        getActiveProfileName: vi.fn(() => "test-custom-reasoner"),
+        getProfile: vi.fn(() => ({ ...customProfile, model_profiles: { ...customProfile.model_profiles } })),
+        createProfile: vi.fn(() => ({ success: true })),
+      };
+
+      const modelsMetadata = {
+        "cliproxyapi/custom-reasoner": {
+          id: "cliproxyapi/custom-reasoner",
+          provider: "cliproxyapi",
+          reasoning: true,
+          thinkingLevelMap: {
+            off: null,
+            minimal: null,
+            low: "low",
+            medium: null,
+            high: "high",
+            xhigh: null,
+            max: null,
+          },
+        },
+      };
+
+      const modal = createSddProfilesModal({
+        manager: customManager,
+        availableModels: ["cliproxyapi/custom-reasoner"],
+        modelsMetadata,
+        done,
+      });
+
+      const lines = modal.render(120);
+      const content = lines.join("\n");
+
+      // Only default, low, and high should appear in Col 3
+      expect(content).toContain("default");
+      expect(content).toContain("low");
+      expect(content).toContain("high");
+      expect(content).not.toContain("minimal");
+      expect(content).not.toContain("medium");
+      expect(content).not.toContain("xhigh");
+      expect(content).not.toContain("max");
+    });
+  });
+
+  describe("footer soft divider", () => {
+    it("should render a subtle divider line separating active panel info and shortcuts", () => {
+      const done = vi.fn();
+      const modal = createSddProfilesModal({
+        manager: mockManager,
+        availableModels,
+        done,
+      });
+
+      const lines = modal.render(100);
+      const content = lines.join("\n");
+
+      // Verify presence of panel info, divider line, and shortcuts
+      expect(content).toContain("Panel activo: Perfiles");
+      expect(content).toContain("[Enter]");
+
+      const panelLineIdx = lines.findIndex((l) => l.includes("Panel activo:"));
+      expect(panelLineIdx).toBeGreaterThan(-1);
+
+      // The line right after panel info should be the divider line containing horizontal rule
+      const dividerLine = lines[panelLineIdx + 1];
+      expect(dividerLine).toContain("─");
+
+      // The line after divider should be the shortcuts line
+      const shortcutsLine = lines[panelLineIdx + 2];
+      expect(shortcutsLine).toContain("[Enter]");
+    });
+  });
+
+  describe("export and import modal flows", () => {
+    it("should open export-profile view on 'x', allow path editing and confirm export", () => {
+      const done = vi.fn();
+      const customManager: any = {
+        listProfiles: vi.fn(() => [{ name: "cinlo-export", is_active: true }]),
+        getActiveProfileName: vi.fn(() => "cinlo-export"),
+        getProfile: vi.fn(() => ({ name: "cinlo-export", model_profiles: {} })),
+        exportProfile: vi.fn(() => ({ success: true, path: "/tmp/cinlo-export.json", message: "ok" })),
+      };
+
+      const modal = createSddProfilesModal({
+        manager: customManager,
+        availableModels,
+        done,
+      });
+
+      // Press 'x' on selected profile
+      modal.handleInput("x");
+      let lines = modal.render(100);
+      let content = lines.join("\n");
+      expect(content).toContain("Exportar perfil SDD");
+      expect(content).toContain("cinlo-export");
+      expect(content).toContain("~/cinlo-export.json");
+
+      // Edit path: press backspace 5 times to remove '.json', type '.backup.json'
+      for (let i = 0; i < 5; i++) {
+        modal.handleInput("backspace");
+      }
+      for (const char of ".backup.json") {
+        modal.handleInput(char);
+      }
+
+      lines = modal.render(100);
+      expect(lines.join("\n")).toContain("~/cinlo-export.backup.json");
+
+      // Press Enter to confirm export
+      modal.handleInput("\r");
+      expect(customManager.exportProfile).toHaveBeenCalledWith(
+        "cinlo-export",
+        "~/cinlo-export.backup.json"
+      );
+
+      // Should return to profiles list with feedback message
+      lines = modal.render(100);
+      expect(lines.join("\n")).toContain("exportado con éxito");
+    });
+
+    it("should open import-profile file browser on 'i', allow scope toggling and manual path mode", () => {
+      const done = vi.fn();
+      const customManager: any = {
+        listProfiles: vi.fn(() => [{ name: "existing-profile", is_active: true }]),
+        getActiveProfileName: vi.fn(() => "existing-profile"),
+        getProfile: vi.fn((name: string) => (name === "existing-profile" ? { name: "existing-profile", model_profiles: {} } : null)),
+        importProfile: vi.fn(() => ({
+          success: true,
+          profile: { name: "imported-test", model_profiles: {} },
+          path: "/path/imported-test.json",
+          message: "ok",
+        })),
+      };
+
+      const modal = createSddProfilesModal({
+        manager: customManager,
+        availableModels,
+        done,
+      });
+
+      // Press 'i' on profiles pane -> opens file browser
+      modal.handleInput("i");
+      let lines = modal.render(100);
+      let content = lines.join("\n");
+      expect(content).toContain("Importar perfil SDD (Explorador de archivos)");
+      expect(content).toContain("[1] Proyecto");
+      expect(content).toContain("[2] Global");
+
+      // Default scope is project. Press '2' to switch to global
+      modal.handleInput("2");
+      lines = modal.render(100);
+      expect(lines.join("\n")).toMatch(/●.*\[2\] Global/);
+
+      // Press Tab to switch back to project
+      modal.handleInput("\t");
+      lines = modal.render(100);
+      expect(lines.join("\n")).toMatch(/●.*\[1\] Proyecto/);
+
+      // Press 'm' to switch to manual path mode
+      modal.handleInput("m");
+      lines = modal.render(100);
+      expect(lines.join("\n")).toContain("Ruta manual");
+
+      // Type file path in manual mode
+      for (const char of "./test-profile.json") {
+        modal.handleInput(char);
+      }
+
+      lines = modal.render(100);
+      expect(lines.join("\n")).toContain("./test-profile.json");
+
+      // Press Enter to import
+      modal.handleInput("\r");
+      expect(customManager.importProfile).toHaveBeenCalledWith({
+        sourceFilePath: "./test-profile.json",
+        scope: "project",
+      });
+
+      // Returns to profiles list
+      lines = modal.render(100);
+      expect(lines.join("\n")).toContain("importado con éxito en project");
+    });
+
+    it("should navigate directories and select a .json file directly in file browser", () => {
+      const done = vi.fn();
+      const customManager: any = {
+        listProfiles: vi.fn(() => [{ name: "existing-profile", is_active: true }]),
+        getActiveProfileName: vi.fn(() => "existing-profile"),
+        getProfile: vi.fn(() => ({ name: "existing-profile", model_profiles: {} })),
+        importProfile: vi.fn(() => ({
+          success: true,
+          profile: { name: "cin", model_profiles: {} },
+          path: "/home/cinlodev/cin.json",
+          message: "ok",
+        })),
+      };
+
+      const modal = createSddProfilesModal({
+        manager: customManager,
+        availableModels,
+        done,
+      });
+
+      // Press 'i' on profiles pane
+      modal.handleInput("i");
+      let lines = modal.render(100);
+      expect(lines.join("\n")).toContain("Explorador de archivos");
+
+      // Press 'down' a few times and 'Enter'
+      modal.handleInput("down");
+      modal.handleInput("up");
+      expect(lines.join("\n")).toContain("Ámbito destino");
+    });
+
+    it("should trigger conflict resolution when importing a profile whose name already exists", () => {
+      const done = vi.fn();
+      // Setup a real temp JSON file that has name: "existing-profile"
+      const tempJson = path.join(os.tmpdir(), "connn.json");
+      fs.writeFileSync(tempJson, JSON.stringify({ name: "existing-profile", model_profiles: {} }), "utf-8");
+
+      try {
+        const customManager: any = {
+          listProfiles: vi.fn(() => [{ name: "existing-profile", is_active: true }]),
+          getActiveProfileName: vi.fn(() => "existing-profile"),
+          getProfile: vi.fn((name: string) => (name === "existing-profile" ? { name: "existing-profile", model_profiles: {} } : null)),
+          importProfile: vi.fn(({ overrideName }) => ({
+            success: true,
+            profile: { name: overrideName || "existing-profile", model_profiles: {} },
+            path: tempJson,
+            message: "ok",
+          })),
+        };
+
+        const modal = createSddProfilesModal({
+          manager: customManager,
+          availableModels,
+          done,
+        });
+
+        // Open import with 'i'
+        modal.handleInput("i");
+        // Switch to manual mode with 'm'
+        modal.handleInput("m");
+
+        // Type the temp json path
+        for (const char of tempJson) {
+          modal.handleInput(char);
+        }
+
+        // Press Enter to trigger import -> should detect conflict!
+        modal.handleInput("\r");
+        let lines = modal.render(100);
+        let content = lines.join("\n");
+        expect(content).toContain("Conflicto al importar perfil SDD");
+        expect(content).toContain("El perfil ya existe");
+        expect(content).toContain("existing-profile");
+        expect(content).toContain("[1 / o] Sobreescribir");
+        expect(content).toContain("[2 / r] Renombrar");
+
+        // Press '2' (or 'r') to rename
+        modal.handleInput("2");
+        lines = modal.render(100);
+        expect(lines.join("\n")).toContain("Renombrar Perfil Importado");
+        // Suggested name was 'connn' because the file is connn.json!
+        expect(lines.join("\n")).toContain("connn");
+
+        // Press Enter to confirm import with new name
+        modal.handleInput("\r");
+        expect(customManager.importProfile).toHaveBeenCalledWith({
+          sourceFilePath: tempJson,
+          scope: "project",
+          overrideName: "connn",
+        });
+
+        lines = modal.render(100);
+        expect(lines.join("\n")).toContain("importado con éxito");
+      } finally {
+        if (fs.existsSync(tempJson)) fs.unlinkSync(tempJson);
+      }
     });
   });
 });

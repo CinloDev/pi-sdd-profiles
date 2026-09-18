@@ -214,4 +214,37 @@ describe("storage module", () => {
     expect(storage.getActiveProfileName("effective")).toBe("cinlo-flash");
     expect(storage.getActiveScope()).toBe("global");
   });
+
+  it("should export a profile to a destination file and import it back", () => {
+    const exportPath = path.join(tmpRoot, "exported-cinlo.json");
+    const exportedResultPath = storage.exportProfile("cinlo-flash", exportPath);
+    expect(fs.existsSync(exportPath)).toBe(true);
+    expect(exportedResultPath).toBe(path.resolve(exportPath));
+
+    const content = JSON.parse(fs.readFileSync(exportPath, "utf-8"));
+    expect(content.name).toBe("cinlo-flash");
+    expect(content.default_model).toBe("cpamc/cinlo/gemini-3.8-flash-high");
+
+    // Import under a new name into project scope
+    const importRes = storage.importProfile(exportPath, "project", "imported-cinlo");
+    expect(importRes.profile.name).toBe("imported-cinlo");
+    expect(importRes.profile.default_model).toBe("cpamc/cinlo/gemini-3.8-flash-high");
+
+    const loaded = storage.loadProfile("imported-cinlo");
+    expect(loaded).toBeDefined();
+    expect(loaded?.name).toBe("imported-cinlo");
+  });
+
+  it("should fail exporting non-existent profile and importing invalid JSON", () => {
+    expect(() => storage.exportProfile("non-existent-xyz", path.join(tmpRoot, "out.json"))).toThrow(
+      /No se encontró el perfil/
+    );
+
+    const badJsonPath = path.join(tmpRoot, "bad.json");
+    fs.writeFileSync(badJsonPath, "{ not valid json", "utf-8");
+    expect(() => storage.importProfile(badJsonPath, "global")).toThrow(/JSON válido/);
+
+    const missingFile = path.join(tmpRoot, "does-not-exist.json");
+    expect(() => storage.importProfile(missingFile, "global")).toThrow(/no existe/);
+  });
 });
