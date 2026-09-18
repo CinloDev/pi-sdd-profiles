@@ -239,4 +239,28 @@ describe("manager module", () => {
     const restoredProject = JSON.parse(fs.readFileSync(projectSubagentsPath, "utf-8"));
     expect(restoredProject.model_profiles["sdd-apply"].model).toBe("provider/o3-mini");
   });
+
+  it("should export and import profiles via manager", () => {
+    const exportFile = path.join(tmpRoot, "exported-manager.json");
+    const exportRes = manager.exportProfile("cinlo-flash", exportFile);
+    expect(exportRes.success).toBe(true);
+    expect(fs.existsSync(exportFile)).toBe(true);
+
+    const importRes = manager.importProfile({
+      sourceFilePath: exportFile,
+      scope: "project",
+      overrideName: "imported-manager",
+    });
+    expect(importRes.success).toBe(true);
+    expect(importRes.profile?.name).toBe("imported-manager");
+    expect(manager.getProfile("imported-manager")).toBeDefined();
+
+    // Test export failure on invalid name
+    const failExport = manager.exportProfile("non-existent-xyz", exportFile);
+    expect(failExport.success).toBe(false);
+
+    // Test import failure on invalid path
+    const failImport = manager.importProfile({ sourceFilePath: "does-not-exist.json" });
+    expect(failImport.success).toBe(false);
+  });
 });

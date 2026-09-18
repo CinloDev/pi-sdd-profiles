@@ -1,4 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import * as fs from "node:fs";
+import * as path from "node:path";
+import * as os from "node:os";
 import { createSddProfilesModal } from "../src/modal.js";
 
 describe("modal overlay component", () => {
@@ -1218,6 +1221,215 @@ describe("modal overlay component", () => {
       // The line after divider should be the shortcuts line
       const shortcutsLine = lines[panelLineIdx + 2];
       expect(shortcutsLine).toContain("[Enter]");
+    });
+  });
+
+  describe("export and import modal flows", () => {
+    it("should open export-profile view on 'x', allow path editing and confirm export", () => {
+      const done = vi.fn();
+      const customManager: any = {
+        listProfiles: vi.fn(() => [{ name: "cinlo-export", is_active: true }]),
+        getActiveProfileName: vi.fn(() => "cinlo-export"),
+        getProfile: vi.fn(() => ({ name: "cinlo-export", model_profiles: {} })),
+        exportProfile: vi.fn(() => ({ success: true, path: "/tmp/cinlo-export.json", message: "ok" })),
+      };
+
+      const modal = createSddProfilesModal({
+        manager: customManager,
+        availableModels,
+        done,
+      });
+
+      // Press 'x' on selected profile
+      modal.handleInput("x");
+      let lines = modal.render(100);
+      let content = lines.join("\n");
+      expect(content).toContain("Exportar perfil SDD");
+      expect(content).toContain("cinlo-export");
+      expect(content).toContain("~/cinlo-export.json");
+
+      // Edit path: press backspace 5 times to remove '.json', type '.backup.json'
+      for (let i = 0; i < 5; i++) {
+        modal.handleInput("backspace");
+      }
+      for (const char of ".backup.json") {
+        modal.handleInput(char);
+      }
+
+      lines = modal.render(100);
+      expect(lines.join("\n")).toContain("~/cinlo-export.backup.json");
+
+      // Press Enter to confirm export
+      modal.handleInput("\r");
+      expect(customManager.exportProfile).toHaveBeenCalledWith(
+        "cinlo-export",
+        "~/cinlo-export.backup.json"
+      );
+
+      // Should return to profiles list with feedback message
+      lines = modal.render(100);
+      expect(lines.join("\n")).toContain("exportado con éxito");
+    });
+
+    it("should open import-profile file browser on 'i', allow scope toggling and manual path mode", () => {
+      const done = vi.fn();
+      const customManager: any = {
+        listProfiles: vi.fn(() => [{ name: "existing-profile", is_active: true }]),
+        getActiveProfileName: vi.fn(() => "existing-profile"),
+        getProfile: vi.fn((name: string) => (name === "existing-profile" ? { name: "existing-profile", model_profiles: {} } : null)),
+        importProfile: vi.fn(() => ({
+          success: true,
+          profile: { name: "imported-test", model_profiles: {} },
+          path: "/path/imported-test.json",
+          message: "ok",
+        })),
+      };
+
+      const modal = createSddProfilesModal({
+        manager: customManager,
+        availableModels,
+        done,
+      });
+
+      // Press 'i' on profiles pane -> opens file browser
+      modal.handleInput("i");
+      let lines = modal.render(100);
+      let content = lines.join("\n");
+      expect(content).toContain("Importar perfil SDD (Explorador de archivos)");
+      expect(content).toContain("[1] Proyecto");
+      expect(content).toContain("[2] Global");
+
+      // Default scope is project. Press '2' to switch to global
+      modal.handleInput("2");
+      lines = modal.render(100);
+      expect(lines.join("\n")).toMatch(/●.*\[2\] Global/);
+
+      // Press Tab to switch back to project
+      modal.handleInput("\t");
+      lines = modal.render(100);
+      expect(lines.join("\n")).toMatch(/●.*\[1\] Proyecto/);
+
+      // Press 'm' to switch to manual path mode
+      modal.handleInput("m");
+      lines = modal.render(100);
+      expect(lines.join("\n")).toContain("Ruta manual");
+
+      // Type file path in manual mode
+      for (const char of "./test-profile.json") {
+        modal.handleInput(char);
+      }
+
+      lines = modal.render(100);
+      expect(lines.join("\n")).toContain("./test-profile.json");
+
+      // Press Enter to import
+      modal.handleInput("\r");
+      expect(customManager.importProfile).toHaveBeenCalledWith({
+        sourceFilePath: "./test-profile.json",
+        scope: "project",
+      });
+
+      // Returns to profiles list
+      lines = modal.render(100);
+      expect(lines.join("\n")).toContain("importado con éxito en project");
+    });
+
+    it("should navigate directories and select a .json file directly in file browser", () => {
+      const done = vi.fn();
+      const customManager: any = {
+        listProfiles: vi.fn(() => [{ name: "existing-profile", is_active: true }]),
+        getActiveProfileName: vi.fn(() => "existing-profile"),
+        getProfile: vi.fn(() => ({ name: "existing-profile", model_profiles: {} })),
+        importProfile: vi.fn(() => ({
+          success: true,
+          profile: { name: "cin", model_profiles: {} },
+          path: "/home/cinlodev/cin.json",
+          message: "ok",
+        })),
+      };
+
+      const modal = createSddProfilesModal({
+        manager: customManager,
+        availableModels,
+        done,
+      });
+
+      // Press 'i' on profiles pane
+      modal.handleInput("i");
+      let lines = modal.render(100);
+      expect(lines.join("\n")).toContain("Explorador de archivos");
+
+      // Press 'down' a few times and 'Enter'
+      modal.handleInput("down");
+      modal.handleInput("up");
+      expect(lines.join("\n")).toContain("Ámbito destino");
+    });
+
+    it("should trigger conflict resolution when importing a profile whose name already exists", () => {
+      const done = vi.fn();
+      // Setup a real temp JSON file that has name: "existing-profile"
+      const tempJson = path.join(os.tmpdir(), "connn.json");
+      fs.writeFileSync(tempJson, JSON.stringify({ name: "existing-profile", model_profiles: {} }), "utf-8");
+
+      try {
+        const customManager: any = {
+          listProfiles: vi.fn(() => [{ name: "existing-profile", is_active: true }]),
+          getActiveProfileName: vi.fn(() => "existing-profile"),
+          getProfile: vi.fn((name: string) => (name === "existing-profile" ? { name: "existing-profile", model_profiles: {} } : null)),
+          importProfile: vi.fn(({ overrideName }) => ({
+            success: true,
+            profile: { name: overrideName || "existing-profile", model_profiles: {} },
+            path: tempJson,
+            message: "ok",
+          })),
+        };
+
+        const modal = createSddProfilesModal({
+          manager: customManager,
+          availableModels,
+          done,
+        });
+
+        // Open import with 'i'
+        modal.handleInput("i");
+        // Switch to manual mode with 'm'
+        modal.handleInput("m");
+
+        // Type the temp json path
+        for (const char of tempJson) {
+          modal.handleInput(char);
+        }
+
+        // Press Enter to trigger import -> should detect conflict!
+        modal.handleInput("\r");
+        let lines = modal.render(100);
+        let content = lines.join("\n");
+        expect(content).toContain("Conflicto al importar perfil SDD");
+        expect(content).toContain("El perfil ya existe");
+        expect(content).toContain("existing-profile");
+        expect(content).toContain("[1 / o] Sobreescribir");
+        expect(content).toContain("[2 / r] Renombrar");
+
+        // Press '2' (or 'r') to rename
+        modal.handleInput("2");
+        lines = modal.render(100);
+        expect(lines.join("\n")).toContain("Renombrar Perfil Importado");
+        // Suggested name was 'connn' because the file is connn.json!
+        expect(lines.join("\n")).toContain("connn");
+
+        // Press Enter to confirm import with new name
+        modal.handleInput("\r");
+        expect(customManager.importProfile).toHaveBeenCalledWith({
+          sourceFilePath: tempJson,
+          scope: "project",
+          overrideName: "connn",
+        });
+
+        lines = modal.render(100);
+        expect(lines.join("\n")).toContain("importado con éxito");
+      } finally {
+        if (fs.existsSync(tempJson)) fs.unlinkSync(tempJson);
+      }
     });
   });
 });

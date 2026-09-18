@@ -2,7 +2,8 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
 import { fileURLToPath } from "node:url";
-import type { Profile, ProfileScope, ProfileSummary } from "./types.js";
+import type { ModelProfileEntry, Profile, ProfileScope, ProfileSummary } from "./types.js";
+import { parseReasoningEffort } from "./types.js";
 
 export interface StorageOptions {
   globalDir?: string;
@@ -231,6 +232,113 @@ export class ProfileStorage {
     fs.renameSync(tmpPath, targetPath);
 
     return targetPath;
+  }
+
+  /**
+   * Exports a profile to an external file destination.
+   */
+  /**
+   * Resolves a user-supplied path: expands leading `~/` to the home directory
+   * and then resolves relative paths against process.cwd().
+   */
+  private resolvePath(inputPath: string): string {
+    const expanded = inputPath.startsWith("~/") || inputPath === "~"
+      ? path.join(os.homedir(), inputPath.slice(1))
+      : inputPath;
+    return path.resolve(expanded);
+  }
+
+  exportProfile(name: string, targetFilePath: string): string {
+    const profile = this.loadProfile(name);
+    if (!profile) {
+      throw new Error(`No se encontró el perfil "${name}" para exportar.`);
+    }
+
+    const resolvedPath = this.resolvePath(targetFilePath);
+    const targetDir = path.dirname(resolvedPath);
+    if (!fs.existsSync(targetDir)) {
+      fs.mkdirSync(targetDir, { recursive: true });
+    }
+
+    // Clean synthetic menu keys from model_profiles before exporting
+    const cleanedModelProfiles: Record<string, ModelProfileEntry> = {};
+    for (const [key, val] of Object.entries(profile.model_profiles || {})) {
+      if (
+        key.startsWith("⚡") ||
+        key.startsWith("🧠") ||
+        key.startsWith("📦") ||
+        key.startsWith("👑") ||
+        key.includes("[Asignar")
+      ) {
+        continue;
+      }
+      cleanedModelProfiles[key] = val;
+    }
+
+    const cleanedProfile: Profile = {
+      ...profile,
+      model_profiles: cleanedModelProfiles,
+    };
+
+    const formatted = JSON.stringify(cleanedProfile, null, 2) + "\n";
+    fs.writeFileSync(resolvedPath, formatted, "utf-8");
+    return resolvedPath;
+  }
+
+  /**
+   * Validates and imports a profile from an external JSON file.
+   */
+  importProfile(
+    sourceFilePath: string,
+    scope: "global" | "project" = "global",
+    overrideName?: string
+  ): { profile: Profile; path: string } {
+    const resolvedPath = this.resolvePath(sourceFilePath);
+    if (!fs.existsSync(resolvedPath)) {
+      throw new Error(`El archivo de origen no existe: "${sourceFilePath}"`);
+    }
+
+    let raw: unknown;
+    try {
+      raw = JSON.parse(fs.readFileSync(resolvedPath, "utf-8"));
+    } catch (err: any) {
+      throw new Error(`El archivo no contiene un JSON válido: ${err?.message ?? String(err)}`);
+    }
+
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+      throw new Error("El archivo JSON debe contener un objeto de perfil válido.");
+    }
+
+    const candidate = raw as Record<string, any>;
+    const rawName = overrideName ?? candidate.name;
+    if (typeof rawName !== "string" || !rawName.trim()) {
+      throw new Error("El perfil importado debe contener un campo 'name' no vacío.");
+    }
+
+    const name = rawName.trim();
+    const modelProfiles: Record<string, ModelProfileEntry> = {};
+
+    if (candidate.model_profiles && typeof candidate.model_profiles === "object") {
+      for (const [k, v] of Object.entries<any>(candidate.model_profiles)) {
+        if (v && typeof v.model === "string") {
+          modelProfiles[k] = {
+            model: v.model,
+            effort: parseReasoningEffort(v.effort, false),
+          };
+        }
+      }
+    }
+
+    const profile: Profile = {
+      name,
+      description: typeof candidate.description === "string" ? candidate.description : undefined,
+      default_model: typeof candidate.default_model === "string" ? candidate.default_model : undefined,
+      default_effort: parseReasoningEffort(candidate.default_effort, false),
+      model_profiles: modelProfiles,
+    };
+
+    const savedPath = this.saveProfile(profile, scope);
+    return { profile, path: savedPath };
   }
 
   /**
