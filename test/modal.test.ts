@@ -140,7 +140,8 @@ describe("modal overlay component", () => {
 
     let lines = modal.render(80);
     expect(lines.join("\n")).toContain("Filtrar:");
-    expect(lines.join("\n")).toContain("claude-sonnet-4-5");
+    expect(lines.join("\n")).toContain("Proveedores");
+    expect(lines.join("\n")).toContain("Modelos disponibles");
 
     // Type "flash" to filter
     modal.handleInput("f");
@@ -151,7 +152,6 @@ describe("modal overlay component", () => {
 
     lines = modal.render(80);
     const content = lines.join("\n");
-    expect(content).toContain("gemini-2.5-flash");
     expect(content).toContain("gemini-3.8-flash-high");
     expect(content).not.toContain("claude-sonnet-4-5");
     expect(content).not.toContain("gpt-4o");
@@ -229,7 +229,8 @@ describe("modal overlay component", () => {
     lines = modal.render(80);
     content = lines.join("\n");
     expect(content).toContain("Seleccionar Modelo");
-    expect(content).toContain("anthropic/claude-sonnet-4-5");
+    expect(content).toContain("Proveedores");
+    expect(content).toContain("Modelos disponibles");
 
     // Press 'esc' to exit picker back to editor
     modal.handleInput("\u001b");
@@ -638,30 +639,12 @@ describe("modal overlay component", () => {
       });
 
       lines = modal.render(80);
-      expect(lines.join("\n")).toMatch(/›\s+openai\/.*gpt-4o/);
+      expect(lines.join("\n")).toContain("Proveedores");
+      expect(lines.join("\n")).toContain("Modelos disponibles");
 
-      // Find the row of "google/gemini-pro"
-      const geminiRow = lines.findIndex((l) => l.includes("google/gemini-pro"));
-      expect(geminiRow).toBeGreaterThan(0);
-
-      // Double click on gemini
-      (modal as any).handleMouse({
-        type: "click",
-        button: "left",
-        x: 15,
-        y: geminiRow,
-        screenX: 15,
-        screenY: geminiRow,
-        width: 80,
-        height: lines.length,
-        shift: false,
-        alt: false,
-        ctrl: false,
-        clickCount: 2,
-      });
-
+      // Press Enter to select the active model and advance to effort picker
+      modal.handleInput("\r");
       lines = modal.render(80);
-      // Opens effort picker!
       expect(lines.join("\n")).toContain("Nivel de Razonamiento");
     });
 
@@ -1500,6 +1483,81 @@ describe("modal overlay component", () => {
       expect(content).toContain("p-08");
       // p-09 should be clamped/hidden to protect smaller screen
       expect(content).not.toContain("p-09");
+    });
+  });
+
+  describe("two-column master-detail model picker", () => {
+    it("should render providers on the left and models on the right, allowing Tab switching", () => {
+      const done = vi.fn();
+      const multiProviderModels = [
+        "cpamc/cinlo/gemini-3.8-flash-high",
+        "cpamc/cinlo/gpt-oss-120b-medium",
+        "cpamc/cin82/gemini-pro",
+        "anthropic/claude-3-7-sonnet",
+        "openai/o3-mini",
+        "google/gemini-2.5-flash",
+      ];
+
+      const modal = createSddProfilesModal({
+        manager: mockManager,
+        availableModels: multiProviderModels,
+        done,
+      });
+
+      // Enter editor and open model picker
+      modal.handleInput("e");
+      modal.handleInput("m");
+
+      let lines = modal.render(100);
+      let content = lines.join("\n");
+
+      // Verify two-column headers and vertical divider
+      expect(content).toContain("Proveedores");
+      expect(content).toContain("Modelos disponibles");
+      expect(content).toContain("│");
+
+      // Verify providers are listed on left with count
+      expect(content).toContain("cpamc/cin82");
+      expect(content).toContain("(1)");
+      expect(content).toContain("cpamc/cinlo");
+      expect(content).toContain("(2)");
+      expect(content).toContain("anthropic");
+      expect(content).toContain("google");
+      expect(content).toContain("openai");
+
+      // By default, first provider cpamc/cin82 is selected, showing its clean models on the right
+      expect(content).toContain("gemini-pro");
+
+      // Switch active pane to providers with Tab
+      modal.handleInput("\t");
+      lines = modal.render(100);
+      content = lines.join("\n");
+      expect(content).toContain("› Proveedores");
+
+      // Navigate down to cpamc/cinlo
+      modal.handleInput("\u001b[B"); // down
+      lines = modal.render(100);
+      content = lines.join("\n");
+      // Right side now updates to show cpamc/cinlo's models!
+      expect(content).toContain("gemini-3.8-flash-high");
+      expect(content).toContain("gpt-oss-120b-medium");
+      expect(content).not.toContain("gemini-pro");
+
+      // Navigate down to anthropic
+      modal.handleInput("\u001b[B"); // down
+      lines = modal.render(100);
+      content = lines.join("\n");
+      expect(content).toContain("claude-3-7-sonnet");
+
+      // Switch back to models pane with Tab
+      modal.handleInput("\t");
+      lines = modal.render(100);
+      expect(lines.join("\n")).toContain("› Modelos disponibles");
+
+      // Press Enter to pick the model and advance to effort picker
+      modal.handleInput("\r");
+      lines = modal.render(100);
+      expect(lines.join("\n")).toContain("Nivel de Razonamiento");
     });
   });
 });
