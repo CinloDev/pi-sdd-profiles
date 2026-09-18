@@ -3,6 +3,11 @@ import type { TuiMouseEvent, TuiMouseEventResult } from "@earendil-works/pi-tui"
 import { ALL_KNOWN_AGENTS, SDD_AGENT_CATEGORIES, type AgentCategory } from "./catalog.js";
 import type { SddProfileManager } from "./manager.js";
 import {
+  type ModelMetadata,
+  getSupportedEffortsForModel,
+  DEFAULT_EFFORT_OPTIONS,
+} from "./models-resolver.js";
+import {
   constrainLines,
   frameModal,
   normalizeModalKey,
@@ -31,6 +36,7 @@ export type ActivePane = "profiles" | "agents" | "effort";
 export interface ModalInput {
   manager: SddProfileManager;
   availableModels: string[];
+  modelsMetadata?: Record<string, ModelMetadata>;
   theme?: any;
   tui?: { requestRender?: () => void };
   onProfileActivated?: (profile: Profile) => Promise<void> | void;
@@ -42,16 +48,7 @@ export const ASSIGN_ALL_SUBAGENTS_KEY = "⚡ [Asignar un mismo modelo a TODOS lo
 export const ASSIGN_ALL_EFFORT_KEY = "🧠 [Asignar un mismo nivel de esfuerzo a TODOS los subagentes...]";
 export const ASSIGN_CATEGORY_KEY = "📦 [Asignar modelo por Categoría...]";
 
-export const EFFORT_OPTIONS: Array<ReasoningEffort | "default"> = [
-  "default",
-  "off",
-  "minimal",
-  "low",
-  "medium",
-  "high",
-  "xhigh",
-  "max",
-];
+export const EFFORT_OPTIONS: Array<ReasoningEffort | "default"> = DEFAULT_EFFORT_OPTIONS;
 
 export interface TreeItem {
   type: "orchestrator" | "all-subagents" | "all-effort" | "category" | "agent";
@@ -64,6 +61,7 @@ export interface TreeItem {
 export function createSddProfilesModal(input: ModalInput) {
   const { manager, theme, tui, done, onProfileActivated } = input;
   const availableModels = input.availableModels;
+  const modelsMetadata = input.modelsMetadata;
 
   let view: ModalView = "profiles-list";
   let activePane: ActivePane = "profiles";
@@ -245,6 +243,45 @@ export function createSddProfilesModal(input: ModalInput) {
       return "default";
     }
     return fullProf.model_profiles[item.id]?.effort ?? fullProf.default_effort ?? "default";
+  };
+
+  const getCurrentTargetModel = (): string | undefined => {
+    const prof = editingProfile ?? (selectedProfile() ? manager.getProfile(selectedProfile()!.name) : null);
+    if (!prof) return undefined;
+
+    const item = selectedTreeItem();
+    if (!item || item.type === "orchestrator") {
+      return prof.default_model;
+    }
+    if (item.type === "agent") {
+      return prof.model_profiles[item.id]?.model ?? prof.default_model;
+    }
+    if (item.type === "category" && item.category) {
+      const models = item.category.agents
+        .map((ag) => prof.model_profiles[ag]?.model ?? prof.default_model)
+        .filter(Boolean);
+      if (models.length > 0 && models.every((m) => m === models[0])) {
+        return models[0];
+      }
+      return undefined;
+    }
+    return undefined;
+  };
+
+  const getCol3EffortOptions = (): Array<ReasoningEffort | "default"> => {
+    const model = getCurrentTargetModel();
+    const supported = getSupportedEffortsForModel(model, modelsMetadata);
+    const prof = editingProfile ?? (selectedProfile() ? manager.getProfile(selectedProfile()!.name) : null);
+    const currentEffort = getCurrentAgentEffort(prof);
+    if (currentEffort !== "default" && !supported.includes(currentEffort)) {
+      return [...supported, currentEffort];
+    }
+    return supported;
+  };
+
+  const getPickerEffortOptions = (): Array<ReasoningEffort | "default"> => {
+    const model = stagedModel ?? getCurrentTargetModel();
+    return getSupportedEffortsForModel(model, modelsMetadata);
   };
 
   const shortenModel = (modelStr: string, maxLen: number = 22): string => {
@@ -514,10 +551,13 @@ export function createSddProfilesModal(input: ModalInput) {
 
     const curTreeItem = selectedTreeItem();
     const currentAgentEffort = currentFullProfile ? getCurrentAgentEffort(currentFullProfile, curTreeItem.id) : "default";
+    const col3Options = getCol3EffortOptions();
 
     if (activePane !== "effort") {
-      const effIdx = EFFORT_OPTIONS.indexOf(currentAgentEffort);
-      if (effIdx !== -1) selectedEffortIndex = effIdx;
+      const effIdx = col3Options.indexOf(currentAgentEffort);
+      selectedEffortIndex = effIdx !== -1 ? effIdx : 0;
+    } else {
+      selectedEffortIndex = Math.min(Math.max(0, selectedEffortIndex), Math.max(0, col3Options.length - 1));
     }
 
     const activeProfileObj = activeProfileName ? manager.getProfile(activeProfileName) : null;
@@ -667,8 +707,8 @@ export function createSddProfilesModal(input: ModalInput) {
 
     const col3Lines: string[] = [];
     for (let offset = 0; offset < maxVisible; offset++) {
-      if (offset < EFFORT_OPTIONS.length) {
-        const opt = EFFORT_OPTIONS[offset];
+      if (offset < col3Options.length) {
+        const opt = col3Options[offset];
         const isFocused = offset === selectedEffortIndex;
         const isCurrent = opt === currentAgentEffort;
         const cursor = (activePane === "effort" && isFocused)
@@ -684,6 +724,8 @@ export function createSddProfilesModal(input: ModalInput) {
           opt === "default" ? cDim(" (auto)") : "";
 
         col3Lines.push(`${cursor}${radio}${optLabel}${badge}`);
+      } else if (offset === col3Options.length && col3Options.length === 1 && col3Options[0] === "default") {
+        col3Lines.push(cDim("  (sin razonamiento)"));
       } else {
         col3Lines.push("");
       }
@@ -722,7 +764,7 @@ export function createSddProfilesModal(input: ModalInput) {
           xEnd: col2XEnd,
         });
       }
-      if (offset < EFFORT_OPTIONS.length) {
+      if (offset < col3Options.length) {
         clickTargets.push({
           y: currentBodyStartY + rowY,
           type: "item",
@@ -1029,8 +1071,11 @@ export function createSddProfilesModal(input: ModalInput) {
       cBorderMuted("═".repeat(Math.max(10, width - 6))),
     ];
 
+    const pickerEffortOptions = getPickerEffortOptions();
+    pickerIndex = Math.min(Math.max(0, pickerIndex), Math.max(0, pickerEffortOptions.length - 1));
+
     const listLines: string[] = [];
-    for (const [idx, item] of EFFORT_OPTIONS.entries()) {
+    for (const [idx, item] of pickerEffortOptions.entries()) {
       registerItemTarget(header.length + idx, idx);
       const isSelected = idx === pickerIndex;
       const cursor = isSelected ? cHighlight("› ") : "  ";
@@ -1044,9 +1089,11 @@ export function createSddProfilesModal(input: ModalInput) {
               : item === "max"
                 ? ` ${cMuted("(máxima profundidad)")}`
                 : item === "default"
-                  ? isOrchestrator
-                    ? ` ${cMuted("(predeterminado del proveedor / sin forzar)")}`
-                    : ` ${cMuted("(heredar por defecto del perfil)")}`
+                  ? pickerEffortOptions.length === 1
+                    ? ` ${cMuted("(este modelo no utiliza niveles de razonamiento)")}`
+                    : isOrchestrator
+                      ? ` ${cMuted("(predeterminado del proveedor / sin forzar)")}`
+                      : ` ${cMuted("(heredar por defecto del perfil)")}`
                   : "";
 
       const effortColorFn =
@@ -1322,6 +1369,7 @@ export function createSddProfilesModal(input: ModalInput) {
 
       // --- Sub-View: Effort Picker ---
       if (view === "effort-picker") {
+        const pickerEffortOptions = getPickerEffortOptions();
         if (key === "q") {
           done({ action: "closed" });
           return;
@@ -1336,9 +1384,9 @@ export function createSddProfilesModal(input: ModalInput) {
         } else if (key === "up" || key === "k") {
           pickerIndex = Math.max(0, pickerIndex - 1);
         } else if (key === "down" || key === "j") {
-          pickerIndex = Math.min(EFFORT_OPTIONS.length - 1, pickerIndex + 1);
+          pickerIndex = Math.min(pickerEffortOptions.length - 1, pickerIndex + 1);
         } else if (key === "enter") {
-          const chosen = EFFORT_OPTIONS[pickerIndex];
+          const chosen = pickerEffortOptions[pickerIndex] ?? "default";
           const effortVal = chosen === "default" ? undefined : chosen;
           if (stagedModel) {
             applyModelOption(stagedModel, effortVal);
@@ -1440,7 +1488,8 @@ export function createSddProfilesModal(input: ModalInput) {
         } else if (activePane === "agents") {
           selectedAgentIndex = Math.min(getVisibleTreeItems().length - 1, selectedAgentIndex + 1);
         } else {
-          selectedEffortIndex = Math.min(EFFORT_OPTIONS.length - 1, selectedEffortIndex + 1);
+          const col3Opts = getCol3EffortOptions();
+          selectedEffortIndex = Math.min(col3Opts.length - 1, selectedEffortIndex + 1);
         }
         requestRender();
         return;
@@ -1475,7 +1524,10 @@ export function createSddProfilesModal(input: ModalInput) {
       if (key === "end") {
         if (activePane === "profiles") selectedProfileIndex = Math.max(0, profiles.length - 1);
         else if (activePane === "agents") selectedAgentIndex = Math.max(0, getVisibleTreeItems().length - 1);
-        else selectedEffortIndex = EFFORT_OPTIONS.length - 1;
+        else {
+          const col3Opts = getCol3EffortOptions();
+          selectedEffortIndex = Math.max(0, col3Opts.length - 1);
+        }
         requestRender();
         return;
       }
@@ -1506,7 +1558,8 @@ export function createSddProfilesModal(input: ModalInput) {
             openModelPicker("agent-model");
           }
         } else if (activePane === "effort") {
-          const chosen = EFFORT_OPTIONS[selectedEffortIndex];
+          const col3Opts = getCol3EffortOptions();
+          const chosen = col3Opts[selectedEffortIndex];
           if (chosen) {
             applyEffortOption(chosen);
           }
@@ -1530,7 +1583,8 @@ export function createSddProfilesModal(input: ModalInput) {
           }
         }
         if (activePane === "effort") {
-          const chosen = EFFORT_OPTIONS[selectedEffortIndex];
+          const col3Opts = getCol3EffortOptions();
+          const chosen = col3Opts[selectedEffortIndex];
           if (chosen) {
             applyEffortOption(chosen);
           }
@@ -1674,7 +1728,8 @@ export function createSddProfilesModal(input: ModalInput) {
             else if (delta < 0) selectedAgentIndex = Math.max(0, selectedAgentIndex - 1);
           } else if (activePane === "effort" || x > col2End) {
             activePane = "effort";
-            if (delta > 0) selectedEffortIndex = Math.min(EFFORT_OPTIONS.length - 1, selectedEffortIndex + 1);
+            const col3Opts = getCol3EffortOptions();
+            if (delta > 0) selectedEffortIndex = Math.min(col3Opts.length - 1, selectedEffortIndex + 1);
             else if (delta < 0) selectedEffortIndex = Math.max(0, selectedEffortIndex - 1);
           } else {
             activePane = "profiles";
@@ -1778,7 +1833,8 @@ export function createSddProfilesModal(input: ModalInput) {
               if (target.pane === 2) {
                 activePane = "effort";
                 selectedEffortIndex = itemIdx;
-                const chosen = EFFORT_OPTIONS[itemIdx];
+                const col3Opts = getCol3EffortOptions();
+                const chosen = col3Opts[itemIdx];
                 if (chosen) {
                   applyEffortOption(chosen);
                 }
