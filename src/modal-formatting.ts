@@ -204,6 +204,9 @@ export function normalizeModalKey(data: string): string {
   if (matchesKey(data, Key.backspace) || data === "\u007f" || data === "\b") {
     return "backspace";
   }
+  if (matchesKey(data, Key.space) || data === " ") {
+    return "space";
+  }
   if (matchesKey(data, Key.tab) || data === "\t") {
     return "tab";
   }
