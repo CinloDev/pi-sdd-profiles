@@ -1432,4 +1432,74 @@ describe("modal overlay component", () => {
       }
     });
   });
+
+  describe("adaptive visible height", () => {
+    it("should display up to 15 items when sufficient height is available", () => {
+      const done = vi.fn();
+      // Generate 20 profiles to test visibility count
+      const twentyProfiles = Array.from({ length: 20 }, (_, i) => ({
+        name: `profile-${String(i + 1).padStart(2, "0")}`,
+        default_model: "anthropic/claude-3-7-sonnet",
+        agent_count: 5,
+        scope: "global" as const,
+        is_active: i === 0,
+      }));
+
+      const customManager: any = {
+        listProfiles: vi.fn(() => twentyProfiles),
+        getActiveProfileName: vi.fn(() => "profile-01"),
+        getProfile: vi.fn((name: string) => ({ name, model_profiles: {} })),
+      };
+
+      const modal = createSddProfilesModal({
+        manager: customManager,
+        availableModels,
+        tui: { height: 40 },
+        done,
+      });
+
+      const lines = modal.render(100);
+      const content = lines.join("\n");
+
+      // In a terminal with height: 40, maxVisible should be 15
+      // Verify profile-01 through profile-15 are rendered in the lines
+      expect(content).toContain("profile-01");
+      expect(content).toContain("profile-15");
+      // profile-16 should be hidden behind scroll
+      expect(content).not.toContain("profile-16");
+    });
+
+    it("should adaptively clamp maxVisible on constrained terminal heights", () => {
+      const done = vi.fn();
+      const twentyProfiles = Array.from({ length: 20 }, (_, i) => ({
+        name: `p-${String(i + 1).padStart(2, "0")}`,
+        default_model: "anthropic/claude-3-7-sonnet",
+        agent_count: 5,
+        scope: "global" as const,
+        is_active: i === 0,
+      }));
+
+      const customManager: any = {
+        listProfiles: vi.fn(() => twentyProfiles),
+        getActiveProfileName: vi.fn(() => "p-01"),
+        getProfile: vi.fn((name: string) => ({ name, model_profiles: {} })),
+      };
+
+      // Constrained terminal: height = 20 (reservedRows = 12 => available = 8)
+      const modal = createSddProfilesModal({
+        manager: customManager,
+        availableModels,
+        tui: { height: 20 },
+        done,
+      });
+
+      const lines = modal.render(100);
+      const content = lines.join("\n");
+
+      expect(content).toContain("p-01");
+      expect(content).toContain("p-08");
+      // p-09 should be clamped/hidden to protect smaller screen
+      expect(content).not.toContain("p-09");
+    });
+  });
 });
