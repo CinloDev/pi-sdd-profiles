@@ -5,7 +5,7 @@ Extensión nativa para **Pi Coding Agent** para crear, guardar, versionar y alte
 Se integra de forma transparente y atómica con [`pi-subagents-j0k3r`](https://github.com/j0k3r-dev-rgl/pi-subagents-j0k3r), actualizando las asignaciones de modelos en `subagents.json` sin alterar timeouts, atajos de teclado ni herramientas configuradas.
 
 <p align="center">
-  <img src="public/1.png" alt="SDD Profile Manager — Ventana Flotante Modal" width="850" />
+  <img src="public/1.png" alt="SDD Profile Manager — Cockpit de 3 Columnas" width="850" />
 </p>
 
 ---
@@ -102,8 +102,13 @@ pi remove https://github.com/CinloDev/pi-sdd-profiles
 
 ## ✨ Características
 
-- 🪟 **Ventana Flotante Modal Interactiva**: Se abre centrada en la terminal (`alt+m`, `ctrl+shift+m` o `/sdd-profile`) sin borrar el historial ni salir del contexto.
-- 🖱️ **Soporte Completo de Mouse (Ruedita y Clics)**: Hacé scroll con la rueda del mouse por listas largas, seleccioná filas con un clic, activá perfiles o abrí selectores con doble clic, y clickeá directamente los botones de acción (`[Activar]`, `[Editar]`, `[Nuevo]`, `[Guardar]`, `[Salir]`) en modo fullscreen.
+- 🪟 **Cockpit Miller Columns de 3 Paneles**: Perfiles a la izquierda, subagentes en acordeón expandible al centro, y esfuerzo de razonamiento en tiempo real a la derecha. Navegación fluida con `Tab` o `←`/`→`.
+- 🔍 **Selector de Modelos de 2 Columnas (Master-Detail)**: Pantalla dividida con lista de proveedores/cuentas a la izquierda (`cin82`, `cinlo`, `anthropic`, `google`, etc.) y modelos limpios a la derecha, con indicador del modelo `Actual` en la cabecera y selección suave en el lugar.
+- 📦 **Exportación e Importación Universal**:
+  - Exportá cualquier perfil a `.json` con `x` (con resolución inteligente de rutas `~/` y limpieza de claves sintéticas).
+  - Importá perfiles con `i` mediante un **mini-explorador de archivos interactivo** en la TUI (carpetas `📁`, archivos `.json` `📄`, subida de nivel `..`, soporte para selección de scope `[1] Proyecto` vs `[2] Global`, y diálogo inteligente de resolución de conflictos con sugerencia de renombrado o sobreescritura).
+- 🖱️ **Soporte Completo de Mouse (Ruedita y Clics)**: Hacé scroll con la rueda del mouse por listas largas, seleccioná filas con un clic, activá perfiles o abrí selectores con doble clic, y clickeá directamente los botones de acción (`[Activar]`, `[Edit]`, `[Nuevo]`, `[Export]`, `[Import]`, `[Borrar]`, `[Salir]`) o el botón `[ x ]` superior.
+- 📐 **Vista Adaptativa de hasta 15 Filas**: Mayor altura visual para visualizar de un tirón categorías completas como `SDD Core` sin necesidad de scroll excesivo, adaptándose a pantallas más reducidas.
 - ⚡ **Cambio en caliente**: Alterná perfiles y sincronizá el modelo de sesión y los subagentes al instante.
 - 📦 **Perfiles Estándar Incluidos**:
   - `balanced-default`: Equilibrio entre calidad y costo con Claude Sonnet 4.5 y Claude Haiku 4.5.
@@ -127,40 +132,50 @@ Si utilizás Pi en modo fullscreen (`--tui-mode fullscreen` o en `/settings` con
 - **Doble clic**: Activa el perfil en la lista principal, abre el selector de modelos en el editor o confirma la opción seleccionada.
 - **Clic en botones de acción**: Podés clickear directamente los atajos de la barra superior o inferior (`[Enter] Activar`, `[e] Editar`, `[r] Renombrar`, `[n] Nuevo`, `[d] Borrar`, `[s] Guardar`, `[Esc] Salir/Volver`, `Confirmar`, `Cancelar`).
 
-### Vista Principal (Lista de Perfiles)
-- `↑` / `↓` o `j` / `k`: Moverse entre los perfiles disponibles.
-- `Enter`: Activar el perfil seleccionado en caliente (permanece abierto con confirmación visual para que puedas seguir configurando o explorando).
-- `e`: Abrir el editor de modelos del perfil seleccionado.
-- `r`: Renombrar el perfil seleccionado (abre una pantalla rápida para editar el nombre).
+### Vista Principal (Cockpit de 3 Columnas)
+- `↑` / `↓` o `j` / `k`: Moverse entre los ítems de la columna activa.
+- `Tab` / `Shift + Tab` o `←` / `→`: Alternar foco entre **Perfiles**, **Agentes** y **Effort**.
+- `Enter`: En Perfiles activa el perfil en caliente; en Agentes abre el selector de modelos; en Effort aplica el nivel de razonamiento.
+- `Espacio`: En Agentes pliega o despliega categorías del acordeón (`▼ SDD Core`, `► Judgment Day`, etc.).
+- `e`: Modo edición de agentes.
+- `r`: Renombrar el perfil seleccionado.
 - `n`: Crear un nuevo perfil personalizado.
-- `d` / `Supr` (`Delete`): Borrar perfil personalizado (con diálogo de confirmación para evitar pérdidas accidentales). 
-- `Esc` o `q`: Cerrar la ventana flotante.
+- `x`: **Exportar perfil** a un archivo JSON (con sugerencia `~/nombre.json`).
+- `i`: **Importar perfil** abriendo el explorador de archivos interactivo.
+- `d` / `Supr` (`Delete`): Borrar perfil personalizado (con confirmación). 
+- `Esc` o `q` o botón `[ x ]`: Cerrar la ventana flotante.
 
-### Vista de Edición (`e` dentro de un perfil)
-- `↑` / `↓`: Navegar por la lista de agentes.
-- `Enter` o `m`: Abrir selector flotante de modelos para el agente seleccionado.
-- `e`: Cambiar el nivel de esfuerzo de razonamiento.
-- `a`: Asignar un modelo a **TODOS** los agentes del perfil en un solo paso.
-- `c`: Asignar un modelo a una **Categoría** entera (Núcleo SDD, Judgment Day, Revisores).
-- `s`: Guardar los cambios del perfil.
-- `Esc`: Volver a la lista de perfiles.
+---
+
+### Selector de Modelos de 2 Columnas (Master-Detail)
+Al presionar `Enter` o `m` sobre cualquier agente o categoría, se abre el selector maestro-detalle dividido al medio:
+- **Columna Izquierda (Proveedores y Cuentas)**: Agrupa tus modelos por proveedor o cuenta limpia (`cin82`, `cinlo`, `anthropic`, `google`, `openai`, `opencode-go`, etc.) con la cantidad de modelos disponibles.
+- **Columna Derecha (Modelos)**: Lista los modelos del proveedor seleccionado con nombres limpios y marca con `● (actual)` el que está en uso.
+- **Cabecera contextual**: Muestra claramente el modelo asignado actualmente (`Actual: <modelo>`).
+- **Navegación**:
+  - `Tab` o `←` / `→`: Alternar entre el panel de proveedores y el de modelos.
+  - `↑` / `↓`: Navegar. Al moverte por proveedores, la columna de modelos se actualiza en tiempo real.
+  - `Enter`: Selecciona el modelo y vuelve suavemente en el lugar sin saltos de pantalla.
+  - `[Escribir]`: Filtro en tiempo real por cualquier término.
 
 <p align="center">
-  <img src="public/2.png" alt="SDD Profile Manager — Editor de Perfil" width="850" />
+  <img src="public/2.png" alt="SDD Profile Manager — Selector de Modelos de 2 Columnas" width="850" />
 </p>
 
 ---
 
-### Selector Desplegable de Modelos (con Filtro en Tiempo Real)
-Al asignar un modelo a cualquier agente o categoría, se abre la lista flotante con todos los modelos disponibles en tu entorno:
-- **Buscador/Filtro reactivo**: Escribí cualquier término (ej: `flash`, `sonnet`, `gemini`, `o3`) para filtrar al instante entre 50+ modelos.
-- `Backspace`: Borra caracteres del filtro de búsqueda.
-- `↑` / `↓`: Navegar únicamente entre los modelos coincidentes.
-- `Enter`: Confirmar y pasar a la selección de nivel de razonamiento (`effort`).
-- `Esc`: Limpiar filtro o volver al editor.
+### Explorador de Archivos TUI para Importación
+Al presionar `x` en la lista de perfiles, exportás; y al presionar `i`, se abre el **File Browser nativo**:
+- **Navegación**: Explorá carpetas (`📁`) y archivos (`📄`) con `↑`/`↓` y `Enter` (usá `.. (Subir de nivel)` para ascender).
+- **Ámbito de Destino**: Alterná entre `[1] Proyecto (.pi/profiles/)` o `[2] Global (~/.pi/agent/profiles/)` con las teclas `1`, `2` o `Tab`.
+- **Ruta Manual**: Presioná `m` si preferís pegar una ruta absoluta o relativa a mano.
+- **Resolución de Conflictos Inteligente**: Si importás un archivo cuyo nombre de perfil ya existe, te ofrece:
+  - `[1 / o]` **Sobreescribir**: Reemplaza el perfil existente.
+  - `[2 / r]` **Renombrar**: Sugiere automáticamente el nombre del archivo (ej. `cinnn`) para importarlo sin sobreescribir el original.
+  - `[Esc]` **Cancelar**: Vuelve sin aplicar cambios.
 
 <p align="center">
-  <img src="public/3.png" alt="SDD Profile Manager — Selector de Modelos" width="850" />
+  <img src="public/3.png" alt="SDD Profile Manager — Explorador de Archivos para Importación" width="850" />
 </p>
 
 ---
