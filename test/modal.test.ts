@@ -3,6 +3,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
 import { createSddProfilesModal } from "../src/modal.js";
+import { resolveCategories, SDD_AGENT_CATEGORIES, ALL_KNOWN_AGENTS } from "../src/catalog.js";
 
 describe("modal overlay component", () => {
   beforeEach(() => {
@@ -43,6 +44,8 @@ describe("modal overlay component", () => {
     activateProfile: vi.fn((name) => ({ success: true, profile: mockProfileDetails, message: "OK" })),
     createProfile: vi.fn(() => ({ success: true })),
     deleteProfile: vi.fn(() => true),
+    getCategories: vi.fn(() => SDD_AGENT_CATEGORIES),
+    getAllAgents: vi.fn(() => ALL_KNOWN_AGENTS),
   };
 
   const availableModels = [
@@ -1608,6 +1611,265 @@ describe("modal overlay component", () => {
       // All SDD Core agents must be updated to openai/o3-mini
       expect(profileData.model_profiles["sdd-explore"].model).toBe("openai/o3-mini");
       expect(profileData.model_profiles["sdd-archive"].model).toBe("openai/o3-mini");
+    });
+  });
+
+  describe("Custom Agents in modal tree and model/effort assignment", () => {
+    const customAgentsList = ["coder-bot", "tester-ai"];
+    const customCategories = resolveCategories(customAgentsList);
+    const customAllAgents = customCategories.flatMap((c) => c.agents);
+
+    it("should display custom agents under ▼ 📦 Custom Agents in Column 2 tree when expanded", () => {
+      const done = vi.fn();
+      const profileData: any = {
+        name: "test-custom-agents",
+        default_model: "google/gemini-orchestrator",
+        model_profiles: {
+          "coder-bot": { model: "anthropic/claude-sonnet-4-5" },
+        },
+      };
+
+      const customManager: any = {
+        listProfiles: vi.fn(() => [{ name: "test-custom-agents", is_active: true }]),
+        getActiveProfileName: vi.fn(() => "test-custom-agents"),
+        getProfile: vi.fn(() => profileData),
+        createProfile: vi.fn((p) => {
+          Object.assign(profileData, p);
+          return { success: true, profile: p };
+        }),
+        getCategories: vi.fn(() => customCategories),
+        getAllAgents: vi.fn(() => customAllAgents),
+      };
+
+      const modal = createSddProfilesModal({
+        manager: customManager,
+        availableModels: [
+          "anthropic/claude-sonnet-4-5",
+          "openai/o3-mini",
+        ],
+        tui: { height: 40 },
+        done,
+      });
+
+      // Switch to agents pane
+      modal.handleInput("tab");
+
+      // Jump to SDD Core and collapse it so all categories and items fit in the viewport
+      modal.handleInput("c");
+      modal.handleInput(" ");
+
+      // Jump through remaining categories with 'c' until reaching Custom Agents
+      // Judgment Day -> Reviewers -> General -> Custom Agents
+      modal.handleInput("c"); // Judgment Day
+      modal.handleInput("c"); // Reviewers
+      modal.handleInput("c"); // General
+      modal.handleInput("c"); // Custom Agents
+
+      let lines = modal.render(100);
+      expect(lines.join("\n")).toContain("► 📦 Custom Agents");
+
+      // Press Space to expand Custom Agents category
+      modal.handleInput(" ");
+
+      lines = modal.render(100);
+      const content = lines.join("\n");
+      expect(content).toContain("▼ 📦 Custom Agents");
+      expect(content).toContain("coder-bot");
+      expect(content).toContain("tester-ai");
+    });
+
+    it("should allow assigning model and effort to custom agents", () => {
+      const done = vi.fn();
+      const profileData: any = {
+        name: "test-custom-agents",
+        default_model: "google/gemini-orchestrator",
+        model_profiles: {},
+      };
+
+      const customManager: any = {
+        listProfiles: vi.fn(() => [{ name: "test-custom-agents", is_active: true }]),
+        getActiveProfileName: vi.fn(() => "test-custom-agents"),
+        getProfile: vi.fn(() => profileData),
+        createProfile: vi.fn((p) => {
+          Object.assign(profileData, p);
+          return { success: true, profile: p };
+        }),
+        getCategories: vi.fn(() => customCategories),
+        getAllAgents: vi.fn(() => customAllAgents),
+      };
+
+      const modelsMetadata = {
+        "openai/o3-mini": {
+          id: "openai/o3-mini",
+          provider: "openai",
+          supportedEfforts: ["low", "medium", "high"],
+        },
+      };
+
+      const modal = createSddProfilesModal({
+        manager: customManager,
+        availableModels: [
+          "anthropic/claude-sonnet-4-5",
+          "openai/o3-mini",
+        ],
+        modelsMetadata: modelsMetadata as any,
+        done,
+      });
+
+      // Jump to Custom Agents category and expand it
+      modal.handleInput("c");
+      modal.handleInput("c");
+      modal.handleInput("c");
+      modal.handleInput("c");
+      modal.handleInput("c");
+      modal.handleInput(" "); // Expand Custom Agents
+
+      // Move down into coder-bot
+      modal.handleInput("\u001b[B"); // down arrow
+
+      // Press Enter to open model picker for coder-bot
+      modal.handleInput("\r");
+      let lines = modal.render(100);
+      expect(lines.join("\n")).toContain("Agente: coder-bot");
+
+      // Type "o3" to filter and press Enter to select openai/o3-mini
+      modal.handleInput("o");
+      modal.handleInput("3");
+      modal.handleInput("\r"); // selects model
+
+      expect(customManager.createProfile).toHaveBeenCalled();
+      expect(profileData.model_profiles["coder-bot"].model).toBe("openai/o3-mini");
+
+      // Now assign effort to coder-bot:
+      // coder-bot is selected; switch to effort pane with Tab
+      modal.handleInput("tab"); // moves to Col 3 (effort)
+      // Col 3 effort options for o3-mini: [default, low, medium, high]
+      // Move down to 'high' (down 3 times: 0=default, 1=low, 2=medium, 3=high)
+      modal.handleInput("\u001b[B");
+      modal.handleInput("\u001b[B");
+      modal.handleInput("\u001b[B");
+      modal.handleInput("\r"); // Apply effort
+
+      expect(customManager.createProfile).toHaveBeenCalled();
+      expect(profileData.model_profiles["coder-bot"].effort).toBe("high");
+    });
+
+    it("should assign model to all custom agents when configuring the Custom Agents category", () => {
+      const done = vi.fn();
+      const profileData: any = {
+        name: "test-custom-cat",
+        default_model: "google/gemini-orchestrator",
+        model_profiles: {},
+      };
+
+      const customManager: any = {
+        listProfiles: vi.fn(() => [{ name: "test-custom-cat", is_active: true }]),
+        getActiveProfileName: vi.fn(() => "test-custom-cat"),
+        getProfile: vi.fn(() => profileData),
+        createProfile: vi.fn((p) => {
+          Object.assign(profileData, p);
+          return { success: true, profile: p };
+        }),
+        getCategories: vi.fn(() => customCategories),
+        getAllAgents: vi.fn(() => customAllAgents),
+      };
+
+      const modal = createSddProfilesModal({
+        manager: customManager,
+        availableModels: [
+          "anthropic/claude-sonnet-4-5",
+          "openai/o3-mini",
+        ],
+        done,
+      });
+
+      // Navigate to agents pane
+      modal.handleInput("tab");
+
+      // Jump to Custom Agents category with 'c'
+      modal.handleInput("c");
+      modal.handleInput("c");
+      modal.handleInput("c");
+      modal.handleInput("c");
+      modal.handleInput("c"); // On Custom Agents category
+
+      // Press 'm' to open model picker for the category
+      modal.handleInput("m");
+
+      let lines = modal.render(100);
+      expect(lines.join("\n")).toContain("Categoría: Custom Agents");
+
+      // Filter and select anthropic/claude-sonnet-4-5
+      modal.handleInput("s");
+      modal.handleInput("o");
+      modal.handleInput("n");
+      modal.handleInput("\r");
+
+      expect(customManager.createProfile).toHaveBeenCalled();
+      expect(profileData.model_profiles["coder-bot"].model).toBe("anthropic/claude-sonnet-4-5");
+      expect(profileData.model_profiles["tester-ai"].model).toBe("anthropic/claude-sonnet-4-5");
+    });
+
+    it("should cover custom agents when using 'Asignar un mismo modelo a TODOS'", () => {
+      const done = vi.fn();
+      const profileData: any = {
+        name: "test-custom-all",
+        default_model: "google/gemini-orchestrator",
+        model_profiles: {
+          "sdd-explore": { model: "some-old-model" },
+          "coder-bot": { model: "old-custom-model" },
+          "tester-ai": { model: "another-old-model" },
+        },
+      };
+
+      const customManager: any = {
+        listProfiles: vi.fn(() => [{ name: "test-custom-all", is_active: true }]),
+        getActiveProfileName: vi.fn(() => "test-custom-all"),
+        getProfile: vi.fn(() => profileData),
+        createProfile: vi.fn((p) => {
+          Object.assign(profileData, p);
+          return { success: true, profile: p };
+        }),
+        getCategories: vi.fn(() => customCategories),
+        getAllAgents: vi.fn(() => customAllAgents),
+      };
+
+      const modal = createSddProfilesModal({
+        manager: customManager,
+        availableModels: [
+          "anthropic/claude-sonnet-4-5",
+          "openai/o3-mini",
+        ],
+        done,
+      });
+
+      // Navigate to agents pane
+      modal.handleInput("tab");
+      // Move from Orchestrator (index 0) down to 'Asignar un mismo modelo a TODOS' (index 1)
+      modal.handleInput("\u001b[B");
+
+      let lines = modal.render(100);
+      expect(lines.join("\n")).toMatch(/›\s+.*Asignar un mismo modelo a TODOS/);
+
+      // Press Enter to open model picker for all subagents
+      modal.handleInput("\r");
+
+      lines = modal.render(100);
+      expect(lines.join("\n")).toContain("Asignar modelo a:");
+      expect(lines.join("\n")).toContain("TODOS los subagentes");
+
+      // Filter for claude-sonnet-4-5
+      modal.handleInput("s");
+      modal.handleInput("o");
+      modal.handleInput("n");
+      modal.handleInput("\r"); // Selects model
+
+      // Verify createProfile was called and both standard and custom agents received the model
+      expect(customManager.createProfile).toHaveBeenCalled();
+      expect(profileData.model_profiles["sdd-explore"].model).toBe("anthropic/claude-sonnet-4-5");
+      expect(profileData.model_profiles["sdd-archive"].model).toBe("anthropic/claude-sonnet-4-5");
+      expect(profileData.model_profiles["coder-bot"].model).toBe("anthropic/claude-sonnet-4-5");
+      expect(profileData.model_profiles["tester-ai"].model).toBe("anthropic/claude-sonnet-4-5");
     });
   });
 });
