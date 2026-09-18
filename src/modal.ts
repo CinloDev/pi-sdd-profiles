@@ -44,7 +44,7 @@ export interface ModalInput {
   availableModels: string[];
   modelsMetadata?: Record<string, ModelMetadata>;
   theme?: any;
-  tui?: { requestRender?: () => void };
+  tui?: { requestRender?: () => void; height?: number };
   onProfileActivated?: (profile: Profile) => Promise<void> | void;
   done: (result?: { action: "activated" | "saved" | "closed"; profileName?: string }) => void;
 }
@@ -501,6 +501,23 @@ export function createSddProfilesModal(input: ModalInput) {
     return { index: newIndex, scroll: newScroll };
   };
 
+  /**
+   * Computes the adaptive max visible items for lists and columns.
+   * Defaults to 15 rows, but gracefully bounds down on small terminal heights.
+   */
+  const computeMaxVisible = (defaultTarget = 15, reservedRows = 12): number => {
+    const termRows = (typeof tui?.height === "number" && tui.height > 0)
+      ? tui.height
+      : (process.stdout?.rows && process.stdout.rows > 0 ? process.stdout.rows : 0);
+
+    if (termRows > 0) {
+      // Allow up to defaultTarget, but ensure it fits within terminal height minus reserved header/footer rows
+      const available = Math.max(6, termRows - reservedRows);
+      return Math.min(defaultTarget, available);
+    }
+    return defaultTarget;
+  };
+
   // Safe tone helpers bound to Pi's theme tokens with graceful fallbacks
   const safeFg = (color: string, text: string, fallback = "text"): string => {
     if (!theme?.fg) return text;
@@ -607,7 +624,7 @@ export function createSddProfilesModal(input: ModalInput) {
 
   // View: Main 3-Column Profiles Dashboard
   const renderProfilesDashboard = (width: number): string[] => {
-    const maxVisible = 10;
+    const maxVisible = computeMaxVisible(15, 12);
     clickTargets = [];
 
     const clampedProfiles = clampList(selectedProfileIndex, profileScrollOffset, profiles.length, maxVisible);
@@ -1052,7 +1069,7 @@ export function createSddProfilesModal(input: ModalInput) {
       return frameModal("📥 Importar Perfil SDD", [...header, "", inputLine, "", scopeLine, errorLine, ...footer], width, theme);
     }
 
-    const maxVisible = 10;
+    const maxVisible = computeMaxVisible(15, 10);
     const clamped = clampList(browserIndex, browserScrollOffset, browserEntries.length, maxVisible);
     browserIndex = clamped.index;
     browserScrollOffset = clamped.scroll;
@@ -1222,7 +1239,7 @@ export function createSddProfilesModal(input: ModalInput) {
 
   // View: Model Picker
   const renderModelPicker = (width: number): string[] => {
-    const maxVisible = 10;
+    const maxVisible = computeMaxVisible(15, 10);
     const clamped = clampList(pickerIndex, pickerScrollOffset, pickerItems.length, maxVisible);
     pickerIndex = clamped.index;
     pickerScrollOffset = clamped.scroll;
