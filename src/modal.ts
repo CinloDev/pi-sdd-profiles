@@ -19,6 +19,7 @@ import {
   truncateToWidth,
   computeThreeColumnWidths,
   renderThreeColumns,
+  renderTwoColumns,
   renderColumnHeaderDivider,
   type ColumnWidths,
 } from "./modal-formatting.js";
@@ -260,22 +261,75 @@ export function createSddProfilesModal(input: ModalInput) {
   let targetCategory: string | undefined = undefined;
   let stagedModel: string | undefined = undefined;
 
+  // Two-column Model Picker state
+  let pickerActivePane: "providers" | "models" = "models";
+  let pickerProviders: string[] = [];
+  let selectedProviderIndex = 0;
+  let providerScrollOffset = 0;
+  // Map of provider -> array of model IDs
+  let modelsByProvider: Map<string, string[]> = new Map();
+
   // Feedback and model search filter state
   let feedbackMessage: string | null = null;
   let modelFilter = "";
   let allPickerModels: string[] = [];
 
-  const applyModelFilter = () => {
-    const query = modelFilter.trim().toLowerCase();
-    if (!query) {
-      pickerItems = [...allPickerModels];
-    } else {
-      const tokens = query.split(/\s+/).filter(Boolean);
-      pickerItems = allPickerModels.filter((model) => {
-        const lower = model.toLowerCase();
-        return tokens.every((token) => lower.includes(token));
-      });
+  const extractProvider = (modelId: string): string => {
+    const parts = modelId.split("/");
+    if (parts.length >= 3 && parts[0] === "cpamc") {
+      // e.g. cpamc/cin82/gemini-3.8-flash-high -> show account cleanly as "cin82"
+      return parts[1];
     }
+    if (parts.length >= 2) {
+      // e.g. anthropic/claude-3-7-sonnet -> "anthropic"
+      return parts[0];
+    }
+    return "otros";
+  };
+
+  const rebuildProviderGroups = () => {
+    modelsByProvider.clear();
+    const query = modelFilter.trim().toLowerCase();
+    const tokens = query ? query.split(/\s+/).filter(Boolean) : [];
+
+    // Filter matching models
+    const filtered = allPickerModels.filter((model) => {
+      if (tokens.length === 0) return true;
+      const lower = model.toLowerCase();
+      return tokens.every((token) => lower.includes(token));
+    });
+
+    for (const model of filtered) {
+      const prov = extractProvider(model);
+      if (!modelsByProvider.has(prov)) {
+        modelsByProvider.set(prov, []);
+      }
+      modelsByProvider.get(prov)!.push(model);
+    }
+
+    pickerProviders = Array.from(modelsByProvider.keys()).sort((a, b) => {
+      // Prioritize personal accounts (cin82, cinlo, etc.) before standard providers
+      const aIsCin = a.startsWith("cin");
+      const bIsCin = b.startsWith("cin");
+      if (aIsCin && !bIsCin) return -1;
+      if (!aIsCin && bIsCin) return 1;
+      return a.localeCompare(b);
+    });
+
+    if (selectedProviderIndex >= pickerProviders.length) {
+      selectedProviderIndex = Math.max(0, pickerProviders.length - 1);
+    }
+
+    const currentProvider = pickerProviders[selectedProviderIndex];
+    pickerItems = currentProvider ? (modelsByProvider.get(currentProvider) ?? []) : [];
+
+    if (pickerIndex >= pickerItems.length) {
+      pickerIndex = Math.max(0, pickerItems.length - 1);
+    }
+  };
+
+  const applyModelFilter = () => {
+    rebuildProviderGroups();
     pickerIndex = 0;
     pickerScrollOffset = 0;
   };
@@ -288,6 +342,9 @@ export function createSddProfilesModal(input: ModalInput) {
     targetCategory = category;
     allPickerModels = [...availableModels];
     modelFilter = "";
+    pickerActivePane = "models";
+    selectedProviderIndex = 0;
+    providerScrollOffset = 0;
     applyModelFilter();
     view = "model-picker";
   };
@@ -427,10 +484,11 @@ export function createSddProfilesModal(input: ModalInput) {
     const fullProfile = manager.getProfile(profSummary.name);
     if (!fullProfile) return;
 
+    if (!fullProfile.model_profiles) fullProfile.model_profiles = {};
+
     if (pickerTarget === "category-models" && targetCategory) {
       const cat = SDD_AGENT_CATEGORIES.find((c) => c.name === targetCategory || c.id === targetCategory);
       if (cat) {
-        if (!fullProfile.model_profiles) fullProfile.model_profiles = {};
         for (const ag of cat.agents) {
           const eff = effortVal !== undefined ? effortVal : fullProfile.model_profiles[ag]?.effort;
           fullProfile.model_profiles[ag] = {
@@ -442,9 +500,6 @@ export function createSddProfilesModal(input: ModalInput) {
       targetCategory = undefined;
       pickerTarget = "agent-model";
     } else if (pickerTarget === "all-models") {
-      fullProfile.default_model = chosenModel;
-      if (effortVal !== undefined) fullProfile.default_effort = effortVal;
-      if (!fullProfile.model_profiles) fullProfile.model_profiles = {};
       for (const ag of ALL_KNOWN_AGENTS) {
         const eff = effortVal !== undefined ? effortVal : fullProfile.model_profiles[ag]?.effort;
         fullProfile.model_profiles[ag] = {
@@ -459,7 +514,6 @@ export function createSddProfilesModal(input: ModalInput) {
     } else {
       const ag = selectedAgent();
       const eff = effortVal !== undefined ? effortVal : fullProfile.model_profiles[ag]?.effort;
-      if (!fullProfile.model_profiles) fullProfile.model_profiles = {};
       fullProfile.model_profiles[ag] = {
         model: chosenModel,
         ...(eff ? { effort: eff } : {}),
@@ -1237,14 +1291,28 @@ export function createSddProfilesModal(input: ModalInput) {
     return frameModal("🚀 Seleccionar Alcance de Activación", [...header, ...listLines, ...footer], width, theme);
   };
 
-  // View: Model Picker
+  // View: Model Picker (Two-Column Master-Detail)
   const renderModelPicker = (width: number): string[] => {
     const maxVisible = computeMaxVisible(15, 10);
-    const clamped = clampList(pickerIndex, pickerScrollOffset, pickerItems.length, maxVisible);
-    pickerIndex = clamped.index;
-    pickerScrollOffset = clamped.scroll;
 
-    const visibleItems = pickerItems.slice(pickerScrollOffset, pickerScrollOffset + maxVisible);
+    // Make sure provider groups are up to date
+    if (pickerProviders.length === 0 && allPickerModels.length > 0) {
+      rebuildProviderGroups();
+    }
+
+    const currentProvider = pickerProviders[selectedProviderIndex] ?? "";
+    pickerItems = currentProvider ? (modelsByProvider.get(currentProvider) ?? []) : [];
+
+    const clampedProv = clampList(selectedProviderIndex, providerScrollOffset, pickerProviders.length, maxVisible);
+    selectedProviderIndex = clampedProv.index;
+    providerScrollOffset = clampedProv.scroll;
+
+    const clampedModel = clampList(pickerIndex, pickerScrollOffset, pickerItems.length, maxVisible);
+    pickerIndex = clampedModel.index;
+    pickerScrollOffset = clampedModel.scroll;
+
+    const visibleProviders = pickerProviders.slice(providerScrollOffset, providerScrollOffset + maxVisible);
+    const visibleModels = pickerItems.slice(pickerScrollOffset, pickerScrollOffset + maxVisible);
 
     const titleTarget =
       pickerTarget === "all-models"
@@ -1260,56 +1328,156 @@ export function createSddProfilesModal(input: ModalInput) {
       ? `${cHeading("Perfil:")} ${cBold(cAccent(currentProfileName))} ${cBorderMuted("│")} `
       : "";
 
+    // Resolve currently assigned model for the target agent/orchestrator/category
+    const fullProfile = currentProfileName ? manager.getProfile(currentProfileName) : null;
+    let currentAssignedModel = "";
+    if (fullProfile) {
+      if (pickerTarget === "default-model" || (pickerTarget === "agent-model" && selectedAgent() === ORCHESTRATOR_AGENT_KEY)) {
+        currentAssignedModel = fullProfile.default_model ?? "";
+      } else if (pickerTarget === "category-models" && targetCategory) {
+        const cat = SDD_AGENT_CATEGORIES.find((c) => c.name === targetCategory || c.id === targetCategory);
+        if (cat && cat.agents.length > 0) {
+          const models = cat.agents.map((ag) => fullProfile.model_profiles?.[ag]?.model ?? fullProfile.default_model ?? "");
+          if (models.every((m) => m === models[0] && m)) {
+            currentAssignedModel = models[0];
+          } else {
+            currentAssignedModel = "(mixto / varios modelos)";
+          }
+        }
+      } else if (pickerTarget === "all-models") {
+        const models = ALL_KNOWN_AGENTS.map((ag) => fullProfile.model_profiles?.[ag]?.model ?? fullProfile.default_model ?? "");
+        if (models.every((m) => m === models[0] && m)) {
+          currentAssignedModel = models[0];
+        } else {
+          currentAssignedModel = "(mixto / varios modelos)";
+        }
+      } else if (pickerTarget === "agent-model") {
+        const ag = selectedAgent();
+        currentAssignedModel = fullProfile.model_profiles?.[ag]?.model ?? fullProfile.default_model ?? "";
+      }
+    }
+
+    const currentLine = currentAssignedModel
+      ? `${cHeading("Actual:")} ${cModel(currentAssignedModel)}`
+      : "";
+
     const filterBox = modelFilter
-      ? `${cHeading("Filtrar:")} ${cAccent(modelFilter)}${cHighlight("█")} ${cSecondary(`(${pickerItems.length}/${allPickerModels.length} modelos)`)}`
-      : `${cHeading("Filtrar:")} ${cMuted("(escribí cualquier texto para filtrar modelos...)")} ${cSecondary(`(${allPickerModels.length} disponibles)`)}`;
+      ? `${cHeading("Filtrar:")} ${cAccent(modelFilter)}${cHighlight("█")} ${cSecondary(`(${pickerItems.length} en proveedor · ${allPickerModels.length} total)`)}`
+      : `${cHeading("Filtrar:")} ${cMuted("(escribí para filtrar proveedores o modelos...)")} ${cSecondary(`(${allPickerModels.length} disponibles)`)}`;
 
     const header = [
       `${profBadge}${cHeading("Asignar modelo a:")} ${cAccent(titleTarget)}`,
+      ...(currentLine ? [currentLine] : []),
       filterBox,
       cBorderMuted("═".repeat(Math.max(10, width - 6))),
     ];
 
-    const listLines: string[] = [];
-    if (pickerItems.length === 0) {
-      listLines.push(cWarning(`  No se encontraron modelos que coincidan con "${modelFilter}".`));
-      listLines.push(cText("  Presioná [Backspace] para borrar el filtro o [Esc] para volver."));
+    const paddingX = width < 90 ? 1 : 2;
+    const innerWidth = Math.max(1, width - 2);
+    const contentWidth = Math.max(1, innerWidth - (paddingX * 2));
+
+    // Two-column widths: Left (Providers) ~35-40%, Right (Models) remainder
+    const leftColWidth = Math.max(22, Math.min(34, Math.floor(contentWidth * 0.38)));
+    const rightColWidth = Math.max(20, contentWidth - leftColWidth - 1); // 1 for divider
+
+    // Column Headers
+    const col1Header = pickerActivePane === "providers"
+      ? `${cHighlight("› Proveedores")} ${cSecondary(`(${selectedProviderIndex + 1}/${pickerProviders.length})`)}`
+      : `${cHeading("  Proveedores")} ${cDim(`(${pickerProviders.length})`)}`;
+
+    const col2Header = pickerActivePane === "models"
+      ? `${cHighlight("› Modelos disponibles")} ${cSecondary(`(${selectedProviderIndex >= 0 ? pickerItems.length : 0})`)}`
+      : `${cHeading("  Modelos disponibles")} ${cDim(`(${pickerItems.length})`)}`;
+
+    const col1Lines: string[] = [col1Header];
+    const col2Lines: string[] = [col2Header];
+
+    const headerDivider = `${cBorderMuted("─".repeat(leftColWidth))}┼${cBorderMuted("─".repeat(rightColWidth))}`;
+
+    const baseOffset = header.length + 2; // header + col headers + divider
+
+    // Left Column: Providers
+    if (pickerProviders.length === 0) {
+      col1Lines.push(cDim("  (Sin proveedores)"));
     } else {
-      for (const [offset, item] of visibleItems.entries()) {
-        const idx = pickerScrollOffset + offset;
-        registerItemTarget(header.length + offset, idx);
-        const isSelected = idx === pickerIndex;
-        const cursor = isSelected ? cHighlight("› ") : "  ";
+      for (const [offset, prov] of visibleProviders.entries()) {
+        const actualIdx = providerScrollOffset + offset;
+        const isSelected = actualIdx === selectedProviderIndex;
+        const count = modelsByProvider.get(prov)?.length ?? 0;
 
-        const slashIdx = item.indexOf("/");
-        const providerPart = slashIdx !== -1 ? cMuted(item.slice(0, slashIdx + 1)) : "";
-        const modelPart = slashIdx !== -1 ? item.slice(slashIdx + 1) : item;
-        const modelFormatted = isSelected
-          ? cBold(cAccent(modelPart))
-          : cModel(modelPart);
+        const cursor = isSelected ? (pickerActivePane === "providers" ? cHighlight("› ") : cDim("› ")) : "  ";
+        const provFormatted = isSelected
+          ? (pickerActivePane === "providers" ? cBold(cAccent(prov)) : cAccent(prov))
+          : cHeading(prov);
+        const countBadge = ` ${cDim(`(${count})`)}`;
 
-        const line = `${cursor}${providerPart}${modelFormatted}`;
-        listLines.push(line);
+        col1Lines.push(`${cursor}${provFormatted}${countBadge}`);
       }
     }
 
-    const shortcutsLineIndex = header.length + listLines.length + 2;
-    const shortcuts = buildShortcutsLine(shortcutsLineIndex, [
-      { keyTag: "[Escribir]", label: "Filtrar" },
+    // Right Column: Models of current provider
+    if (pickerItems.length === 0) {
+      if (modelFilter) {
+        col2Lines.push(cWarning("  Ningún modelo coincide"));
+      } else {
+        col2Lines.push(cDim("  (Seleccioná un proveedor)"));
+      }
+    } else {
+      for (const [offset, modelId] of visibleModels.entries()) {
+        const actualIdx = pickerScrollOffset + offset;
+        const isSelected = actualIdx === pickerIndex;
+
+        // Clean model name: strip provider prefix if matches
+        let cleanName = modelId;
+        if (currentProvider && modelId.startsWith(currentProvider + "/")) {
+          cleanName = modelId.slice(currentProvider.length + 1);
+        } else {
+          const lastSlash = modelId.lastIndexOf("/");
+          if (lastSlash !== -1) {
+            cleanName = modelId.slice(lastSlash + 1);
+          }
+        }
+
+        const cursor = isSelected ? (pickerActivePane === "models" ? cHighlight("› ") : cDim("› ")) : "  ";
+        const isCurrent = currentAssignedModel && (modelId === currentAssignedModel || cleanName === currentAssignedModel);
+        const currentBadge = isCurrent ? ` ${cSuccess("● (actual)")}` : "";
+
+        const modelFormatted = isSelected
+          ? (pickerActivePane === "models" ? cBold(cAccent(cleanName)) : cAccent(cleanName))
+          : cModel(cleanName);
+
+        col2Lines.push(`${cursor}${modelFormatted}${currentBadge}`);
+      }
+    }
+
+    // Equalize lines to maxVisible + 1 (header)
+    while (col1Lines.length < maxVisible + 1) col1Lines.push("");
+    while (col2Lines.length < maxVisible + 1) col2Lines.push("");
+
+    // Cut off header to render separately above horizontal divider
+    const c1Head = col1Lines[0]!;
+    const c2Head = col2Lines[0]!;
+    const c1Body = col1Lines.slice(1);
+    const c2Body = col2Lines.slice(1);
+
+    const headRow = `${padToVisibleWidth(c1Head, leftColWidth)}│${padToVisibleWidth(c2Head, rightColWidth)}`;
+    const bodyRows = renderTwoColumns(c1Body, c2Body, leftColWidth, rightColWidth, "│");
+
+    const shortcuts = buildShortcutsLine(baseOffset + maxVisible + 1, [
+      { keyTag: "[Tab / ←/→]", label: "Alternar Panel" },
       { keyTag: "[↑/↓]", label: "Navegar" },
       { keyTag: "[Enter]", label: "Elegir", key: "\r" },
+      { keyTag: "[Escribir]", label: "Filtrar" },
       { keyTag: "[Backspace]", label: "Borrar" },
       { keyTag: "[Esc]", label: "Volver", key: "\u001b" },
     ], width);
 
     const footer = [
       cBorderMuted("═".repeat(Math.max(10, width - 6))),
-      "",
       shortcuts,
     ];
 
-    const paddingX = width < 90 ? 1 : 2;
-    return frameModal("📋 Seleccionar Modelo (con Filtro)", [...header, ...listLines, ...footer], width, theme, {
+    return frameModal("📋 Seleccionar Modelo (Proveedores y Modelos)", [...header, headRow, headerDivider, ...bodyRows, ...footer], width, theme, {
       paddingX,
       paddingTop: 1,
       paddingBottom: 0,
@@ -1808,7 +1976,7 @@ export function createSddProfilesModal(input: ModalInput) {
         return;
       }
 
-      // --- Sub-View: Model Picker ---
+      // --- Sub-View: Model Picker (Two-Column Interactive Master-Detail) ---
       if (view === "model-picker") {
         if (key === "esc") {
           if (modelFilter) {
@@ -1823,31 +1991,83 @@ export function createSddProfilesModal(input: ModalInput) {
             modelFilter = modelFilter.slice(0, -1);
             applyModelFilter();
           }
+        } else if (key === "tab" || key === "left" || key === "right") {
+          pickerActivePane = pickerActivePane === "providers" ? "models" : "providers";
         } else if (key === "up") {
-          pickerIndex = Math.max(0, pickerIndex - 1);
-        } else if (key === "down") {
-          pickerIndex = Math.min(pickerItems.length - 1, pickerIndex + 1);
-        } else if (key === "pageup") {
-          pickerIndex = Math.max(0, pickerIndex - 5);
-        } else if (key === "pagedown") {
-          pickerIndex = Math.min(pickerItems.length - 1, pickerIndex + 5);
-        } else if (key === "home") {
-          pickerIndex = 0;
-        } else if (key === "end") {
-          pickerIndex = Math.max(0, pickerItems.length - 1);
-        } else if (key === "enter") {
-          const chosenModel = pickerItems[pickerIndex];
-          if (chosenModel && editingProfile) {
-            // Stage model and seamlessly chain to effort-picker!
-            stagedModel = chosenModel;
+          if (pickerActivePane === "providers") {
+            selectedProviderIndex = Math.max(0, selectedProviderIndex - 1);
+            const prov = pickerProviders[selectedProviderIndex] ?? "";
+            pickerItems = prov ? (modelsByProvider.get(prov) ?? []) : [];
             pickerIndex = 0;
-            view = "effort-picker";
-          } else if (pickerItems.length === 0 && modelFilter.trim().includes("/")) {
-            stagedModel = modelFilter.trim();
-            pickerIndex = 0;
-            view = "effort-picker";
+            pickerScrollOffset = 0;
           } else {
-            view = "profile-editor";
+            pickerIndex = Math.max(0, pickerIndex - 1);
+          }
+        } else if (key === "down") {
+          if (pickerActivePane === "providers") {
+            selectedProviderIndex = Math.min(pickerProviders.length - 1, selectedProviderIndex + 1);
+            const prov = pickerProviders[selectedProviderIndex] ?? "";
+            pickerItems = prov ? (modelsByProvider.get(prov) ?? []) : [];
+            pickerIndex = 0;
+            pickerScrollOffset = 0;
+          } else {
+            pickerIndex = Math.min(pickerItems.length - 1, pickerIndex + 1);
+          }
+        } else if (key === "pageup") {
+          if (pickerActivePane === "providers") {
+            selectedProviderIndex = Math.max(0, selectedProviderIndex - 5);
+            const prov = pickerProviders[selectedProviderIndex] ?? "";
+            pickerItems = prov ? (modelsByProvider.get(prov) ?? []) : [];
+            pickerIndex = 0;
+            pickerScrollOffset = 0;
+          } else {
+            pickerIndex = Math.max(0, pickerIndex - 5);
+          }
+        } else if (key === "pagedown") {
+          if (pickerActivePane === "providers") {
+            selectedProviderIndex = Math.min(pickerProviders.length - 1, selectedProviderIndex + 5);
+            const prov = pickerProviders[selectedProviderIndex] ?? "";
+            pickerItems = prov ? (modelsByProvider.get(prov) ?? []) : [];
+            pickerIndex = 0;
+            pickerScrollOffset = 0;
+          } else {
+            pickerIndex = Math.min(pickerItems.length - 1, pickerIndex + 5);
+          }
+        } else if (key === "home") {
+          if (pickerActivePane === "providers") {
+            selectedProviderIndex = 0;
+            const prov = pickerProviders[selectedProviderIndex] ?? "";
+            pickerItems = prov ? (modelsByProvider.get(prov) ?? []) : [];
+            pickerIndex = 0;
+            pickerScrollOffset = 0;
+          } else {
+            pickerIndex = 0;
+          }
+        } else if (key === "end") {
+          if (pickerActivePane === "providers") {
+            selectedProviderIndex = Math.max(0, pickerProviders.length - 1);
+            const prov = pickerProviders[selectedProviderIndex] ?? "";
+            pickerItems = prov ? (modelsByProvider.get(prov) ?? []) : [];
+            pickerIndex = 0;
+            pickerScrollOffset = 0;
+          } else {
+            pickerIndex = Math.max(0, pickerItems.length - 1);
+          }
+        } else if (key === "enter") {
+          if (pickerActivePane === "providers") {
+            // Enter on provider moves focus to models
+            pickerActivePane = "models";
+          } else {
+            const chosenModel = pickerItems[pickerIndex] || (pickerItems.length === 0 && modelFilter.trim().includes("/") ? modelFilter.trim() : undefined);
+            if (chosenModel) {
+              // Apply model directly without disruptive screen jump
+              applyModelOption(chosenModel);
+              stagedModel = undefined;
+              view = "profile-editor";
+              activePane = "agents";
+            } else {
+              view = "profile-editor";
+            }
           }
         } else if (data.length === 1 && /^[\w\-\.\/ :@+]$/.test(data)) {
           modelFilter += data;
