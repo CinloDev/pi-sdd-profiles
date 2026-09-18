@@ -8,8 +8,8 @@ export interface AgentCategory {
 export const SDD_AGENT_CATEGORIES: AgentCategory[] = [
   {
     id: "sdd-core",
-    name: "Núcleo SDD",
-    description: "Agentes ejecutores de fases de Spec-Driven Development",
+    name: "SDD Core",
+    description: "Spec-Driven Development phase executor agents",
     agents: [
       "sdd-explore",
       "sdd-propose",
@@ -24,13 +24,13 @@ export const SDD_AGENT_CATEGORIES: AgentCategory[] = [
   {
     id: "judgment-day",
     name: "Judgment Day",
-    description: "Revisión dual ciega, jueces y corrección",
+    description: "Blind dual review judges and fix agent",
     agents: ["jd-judge-a", "jd-judge-b", "jd-fix-agent"],
   },
   {
     id: "reviewers",
-    name: "Revisores y Auditores",
-    description: "Lentes de calidad, seguridad y arquitectura",
+    name: "Reviewers & Auditors",
+    description: "Quality, security, and architectural review lenses",
     agents: [
       "security-auditor",
       "review-readability",
@@ -43,8 +43,8 @@ export const SDD_AGENT_CATEGORIES: AgentCategory[] = [
   },
   {
     id: "general",
-    name: "Harness General",
-    description: "Subagentes generales para tareas exploratorias y de código",
+    name: "General Harness",
+    description: "General subagents for code, exploration, and tracking",
     agents: [
       "gentle-ai-explore",
       "gentle-ai-worker",

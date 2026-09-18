@@ -63,7 +63,7 @@ describe("ui formatting module", () => {
     const output = formatProfileDetail(profile, true);
     expect(output).toContain("Perfil SDD: cinlo-flash");
     expect(output).toContain("[ACTIVO]");
-    expect(output).toContain("Núcleo SDD");
+    expect(output).toContain("SDD Core");
     expect(output).toContain("`sdd-explore`: `cpamc/cinlo/gemini-3.8-flash-high` (effort: low)");
     expect(output).toContain("Judgment Day");
     expect(output).toContain("`jd-judge-a`");

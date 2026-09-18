@@ -53,6 +53,25 @@ export function renderThreeColumns(
   return rows;
 }
 
+export function renderTwoColumns(
+  col1Lines: string[],
+  col2Lines: string[],
+  col1Width: number,
+  col2Width: number,
+  divider: string = "│"
+): string[] {
+  const maxRows = Math.max(col1Lines.length, col2Lines.length);
+  const rows: string[] = [];
+
+  for (let i = 0; i < maxRows; i++) {
+    const c1 = padToVisibleWidth(col1Lines[i] ?? "", col1Width);
+    const c2 = padToVisibleWidth(col2Lines[i] ?? "", col2Width);
+    rows.push(`${c1}${divider}${c2}`);
+  }
+
+  return rows;
+}
+
 export function renderColumnHeaderDivider(
   widths: ColumnWidths,
   lineChar: string = "─",
