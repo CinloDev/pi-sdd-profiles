@@ -3,6 +3,13 @@ import * as path from "node:path";
 import * as os from "node:os";
 import { ProfileStorage, type StorageOptions } from "./storage.js";
 import { applyProfileToFile, extractProfileFromConfig, reconcileProfileWithFile } from "./sync.js";
+import {
+  ALL_KNOWN_AGENTS,
+  type AgentCategory,
+  CUSTOM_CATEGORY_ID,
+  isSyntheticAgentKey,
+  resolveCategories,
+} from "./catalog.js";
 import type {
   ModelProfileEntry,
   Profile,
@@ -320,5 +327,104 @@ export class SddProfileManager {
 
   deleteProfile(name: string): boolean {
     return this.storage.deleteProfile(name);
+  }
+
+  /**
+   * Discovers custom agents dynamically from project/global subagents.json,
+   * saved profiles in storage, and the currently active/specified profile.
+   */
+  discoverCustomAgents(currentProfile?: Profile): string[] {
+    const candidateSet = new Set<string>();
+
+    const collectFromConfig = (filePath: string) => {
+      if (!fs.existsSync(filePath)) return;
+      try {
+        const raw = fs.readFileSync(filePath, "utf-8");
+        const data = JSON.parse(raw);
+        if (!data || typeof data !== "object") return;
+
+        if (data.model_profiles && typeof data.model_profiles === "object") {
+          for (const key of Object.keys(data.model_profiles)) {
+            if (typeof key === "string") candidateSet.add(key);
+          }
+        }
+
+        if (data.agents) {
+          if (Array.isArray(data.agents)) {
+            for (const item of data.agents) {
+              if (typeof item === "string") {
+                candidateSet.add(item);
+              } else if (item && typeof item === "object") {
+                if (typeof (item as any).name === "string") candidateSet.add((item as any).name);
+                if (typeof (item as any).id === "string") candidateSet.add((item as any).id);
+                if (typeof (item as any).key === "string") candidateSet.add((item as any).key);
+              }
+            }
+          } else if (typeof data.agents === "object") {
+            for (const [key, val] of Object.entries(data.agents)) {
+              if (typeof key === "string") candidateSet.add(key);
+              if (typeof val === "string") {
+                candidateSet.add(val);
+              } else if (val && typeof val === "object") {
+                if (typeof (val as any).name === "string") candidateSet.add((val as any).name);
+                if (typeof (val as any).id === "string") candidateSet.add((val as any).id);
+                if (typeof (val as any).key === "string") candidateSet.add((val as any).key);
+              }
+            }
+          }
+        }
+      } catch {
+        // Ignore unreadable / malformed files
+      }
+    };
+
+    collectFromConfig(this.projectSubagentsPath);
+    collectFromConfig(this.globalSubagentsPath);
+
+    try {
+      const summaries = this.storage.listProfiles();
+      for (const summary of summaries) {
+        const prof = this.storage.loadProfile(summary.name);
+        if (prof?.model_profiles && typeof prof.model_profiles === "object") {
+          for (const key of Object.keys(prof.model_profiles)) {
+            if (typeof key === "string") candidateSet.add(key);
+          }
+        }
+      }
+    } catch {
+      // Ignore storage errors
+    }
+
+    if (currentProfile?.model_profiles && typeof currentProfile.model_profiles === "object") {
+      for (const key of Object.keys(currentProfile.model_profiles)) {
+        if (typeof key === "string") candidateSet.add(key);
+      }
+    }
+
+    const knownSet = new Set<string>(ALL_KNOWN_AGENTS);
+    const result: string[] = [];
+
+    for (const key of candidateSet) {
+      if (!knownSet.has(key) && !isSyntheticAgentKey(key)) {
+        result.push(key);
+      }
+    }
+
+    return result.sort((a, b) => a.localeCompare(b));
+  }
+
+  /**
+   * Returns all agent categories including standard SDD categories and,
+   * if discovered, a Custom Agents category.
+   */
+  getCategories(currentProfile?: Profile): AgentCategory[] {
+    return resolveCategories(this.discoverCustomAgents(currentProfile));
+  }
+
+  /**
+   * Returns a flat list of all known agent names (standard SDD agents + discovered custom agents).
+   */
+  getAllAgents(currentProfile?: Profile): string[] {
+    return this.getCategories(currentProfile).flatMap((c) => c.agents);
   }
 }
