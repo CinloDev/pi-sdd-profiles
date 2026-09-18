@@ -812,7 +812,7 @@ export function createSddProfilesModal(input: ModalInput) {
     const footer = [
       cBorderMuted(colBottomDivider),
       `${cHeading("Panel activo:")} ${cHighlight(activePaneLabel)} ${cBorderMuted("│")} ${currentFocusInfo}`,
-      "",
+      cDim("─".repeat(contentWidth)),
       shortcuts,
     ];
 
