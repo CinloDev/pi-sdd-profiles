@@ -114,7 +114,7 @@ export function formatProfileList(profiles: ProfileSummary[], activeName: string
 /**
  * Formats a detailed view of a profile by categories.
  */
-export function formatProfileDetail(profile: Profile, isActive = false): string {
+export function formatProfileDetail(profile: Profile, isActive = false, manager?: SddProfileManager): string {
   const activeBadge = isActive ? " [ACTIVO] 🟢" : "";
   const lines: string[] = [
     `📋 **Perfil SDD: ${profile.name}**${activeBadge}`,
@@ -126,8 +126,11 @@ export function formatProfileDetail(profile: Profile, isActive = false): string 
   ];
 
   const assigned = profile.model_profiles || {};
+  const categories = manager?.getCategories
+    ? manager.getCategories(profile)
+    : SDD_AGENT_CATEGORIES;
 
-  for (const category of SDD_AGENT_CATEGORIES) {
+  for (const category of categories) {
     lines.push(`\n**${category.name}** (${category.description}):`);
     let foundAny = false;
     for (const agent of category.agents) {
@@ -143,7 +146,7 @@ export function formatProfileDetail(profile: Profile, isActive = false): string 
     }
   }
 
-  const knownSet = new Set(SDD_AGENT_CATEGORIES.flatMap((c) => c.agents));
+  const knownSet = new Set(categories.flatMap((c) => c.agents));
   const otherAgents = Object.keys(assigned).filter((a) => !knownSet.has(a));
   if (otherAgents.length > 0) {
     lines.push(`\n**Otros Agentes:**`);
@@ -209,7 +212,7 @@ export async function runInteractiveProfileEdit(
     }
 
     if (action.startsWith("📋 Ver resumen")) {
-      const detail = formatProfileDetail(currentProfile);
+      const detail = formatProfileDetail(currentProfile, false, manager);
       ctx.ui?.notify?.(detail, "info");
       continue;
     }
@@ -241,25 +244,27 @@ export async function runInteractiveProfileEdit(
       const effortRes = await promptEffortSelection(ctx, `Esfuerzo para todos los agentes con ${model}:`);
       const effort = effortRes === "default" ? undefined : effortRes;
 
-      for (const agent of ALL_KNOWN_AGENTS) {
+      const allAgents = manager.getAllAgents(currentProfile);
+      for (const agent of allAgents) {
         currentProfile.model_profiles[agent] = {
           model,
           ...(effort ? { effort } : {}),
         };
       }
-      ctx.ui?.notify?.(`Modelo ${model} asignado a todos los ${ALL_KNOWN_AGENTS.length} agentes.`, "info");
+      ctx.ui?.notify?.(`Modelo ${model} asignado a todos los ${allAgents.length} agentes.`, "info");
       continue;
     }
 
     if (action.startsWith("📦 Asignar modelo por Categoría")) {
+      const categories = manager.getCategories(currentProfile);
       const catOptions = [
-        ...SDD_AGENT_CATEGORIES.map((c) => `${c.name} (${c.agents.length} agentes)`),
+        ...categories.map((c) => `${c.name} (${c.agents.length} agentes)`),
         "⬅️ Volver",
       ];
       const selectedCatLabel = await ctx.ui?.select?.("Elegir Categoría a Configurar:", catOptions);
       if (!selectedCatLabel || selectedCatLabel.startsWith("⬅️")) continue;
 
-      const cat = SDD_AGENT_CATEGORIES.find((c) => selectedCatLabel.startsWith(c.name));
+      const cat = categories.find((c) => selectedCatLabel.startsWith(c.name));
       if (!cat) continue;
 
       // Special handling for Judgment Day if user wants cross arbitration
@@ -307,8 +312,9 @@ export async function runInteractiveProfileEdit(
     }
 
     if (action.startsWith("🔍 Asignar Agente por Agente")) {
+      const allAgents = manager.getAllAgents(currentProfile);
       const agentOptions = [
-        ...ALL_KNOWN_AGENTS.map((a) => {
+        ...allAgents.map((a) => {
           const current = currentProfile.model_profiles[a];
           const desc = current ? `[${current.model}${current.effort ? ` : ${current.effort}` : ""}]` : "[hereda default]";
           return `${a} ${desc}`;
@@ -388,7 +394,8 @@ export async function runInteractiveProfileCreate(
   ]);
 
   if (strategy?.startsWith("🚀 Aplicar")) {
-    for (const agent of ALL_KNOWN_AGENTS) {
+    const allAgents = manager.getAllAgents ? manager.getAllAgents() : ALL_KNOWN_AGENTS;
+    for (const agent of allAgents) {
       modelProfiles[agent] = {
         model: defaultModel,
         ...(defaultEffort ? { effort: defaultEffort } : {}),

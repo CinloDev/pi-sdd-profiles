@@ -310,7 +310,39 @@ describe("manager module", () => {
       expect(withCustom[withCustom.length - 1].agents).toEqual(["custom-1"]);
     });
 
+    it("should discover custom agents from agents definition directories (.pi/agents and ~/.pi/agent/agents)", () => {
+      const projectAgentsDir = path.join(path.dirname(projectSubagentsPath), "agents");
+      const globalAgentsDir = path.join(path.dirname(globalSubagentsPath), "agents");
+
+      fs.mkdirSync(projectAgentsDir, { recursive: true });
+      fs.mkdirSync(globalAgentsDir, { recursive: true });
+
+      // Add valid agent definition files
+      fs.writeFileSync(path.join(projectAgentsDir, "my-custom-doc.md"), "# Custom Agent");
+      fs.writeFileSync(path.join(projectAgentsDir, "reviewer-agent.yaml"), "name: reviewer");
+      fs.writeFileSync(path.join(projectAgentsDir, "formatter-agent.yml"), "name: formatter");
+      fs.writeFileSync(path.join(globalAgentsDir, "global-coder.json"), '{"name": "coder"}');
+
+      // Add files that should be ignored / filtered
+      fs.writeFileSync(path.join(projectAgentsDir, ".hidden-agent.md"), "hidden");
+      fs.writeFileSync(path.join(projectAgentsDir, "ignore-me.txt"), "not matching ext");
+      fs.writeFileSync(path.join(globalAgentsDir, "sdd-explore.md"), "known SDD agent");
+      fs.writeFileSync(path.join(globalAgentsDir, "invalid agent key.yaml"), "synthetic key with spaces");
+
+      const discovered = manager.discoverCustomAgents();
+      expect(discovered).toContain("my-custom-doc");
+      expect(discovered).toContain("reviewer-agent");
+      expect(discovered).toContain("formatter-agent");
+      expect(discovered).toContain("global-coder");
+
+      expect(discovered).not.toContain(".hidden-agent");
+      expect(discovered).not.toContain("ignore-me");
+      expect(discovered).not.toContain("sdd-explore");
+      expect(discovered).not.toContain("invalid agent key");
+    });
+
     it("should discover custom agents from project and global subagents.json", () => {
+
       // Configure project subagents.json with custom agents in model_profiles and agents object
       const projectConfig = {
         model_profiles: {

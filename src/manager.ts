@@ -381,6 +381,30 @@ export class SddProfileManager {
     collectFromConfig(this.projectSubagentsPath);
     collectFromConfig(this.globalSubagentsPath);
 
+    const collectFromAgentsDirectory = (dirPath: string) => {
+      if (!fs.existsSync(dirPath)) return;
+      try {
+        const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+        const validExts = new Set([".md", ".json", ".yaml", ".yml"]);
+        for (const entry of entries) {
+          if (!entry.isFile()) continue;
+          const ext = path.extname(entry.name).toLowerCase();
+          if (!validExts.has(ext)) continue;
+          const agentName = path.basename(entry.name, path.extname(entry.name));
+          if (agentName.startsWith(".")) continue;
+          if (isSyntheticAgentKey(agentName)) continue;
+          candidateSet.add(agentName);
+        }
+      } catch {
+        // Ignore unreadable directories
+      }
+    };
+
+    const projectAgentsDir = path.join(path.dirname(this.projectSubagentsPath), "agents");
+    const globalAgentsDir = path.join(path.dirname(this.globalSubagentsPath), "agents");
+    collectFromAgentsDirectory(projectAgentsDir);
+    collectFromAgentsDirectory(globalAgentsDir);
+
     try {
       const summaries = this.storage.listProfiles();
       for (const summary of summaries) {
