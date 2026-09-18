@@ -164,7 +164,7 @@ describe("modal overlay component", () => {
     // Press Enter to select first filtered model
     modal.handleInput("\r");
     lines = modal.render(80);
-    expect(lines.join("\n")).toContain("Nivel de Razonamiento");
+    expect(lines.join("\n")).toContain("Modelo \"cpamc/cin82/gemini-3.8-flash-high\" guardado");
   });
 
   it("should open create view on 'n', accept typed input and enter editor", () => {
@@ -250,11 +250,7 @@ describe("modal overlay component", () => {
     modal.handleInput("\r"); // enter
     lines = modal.render(80);
     content = lines.join("\n");
-    expect(content).toContain("Nivel de Razonamiento"); // Prompted for effort!
-
-    // Select effort (high) and confirm
-    modal.handleInput("\u001b[B"); // down
-    modal.handleInput("\r"); // enter (confirms effort)
+    expect(content).toContain("guardado");
 
     // Now back in editor. Move down to sdd-explore to customize individually
     modal.handleInput("\u001b[B"); // down to index 2 (All effort)
@@ -268,15 +264,10 @@ describe("modal overlay component", () => {
     // Select third model (openai/o3-mini) for sdd-explore individually
     modal.handleInput("\u001b[B");
     modal.handleInput("\u001b[B");
-    modal.handleInput("\r"); // enter -> opens effort picker!
+    modal.handleInput("\r"); // enter -> sets model in-place!
     lines = modal.render(80);
     content = lines.join("\n");
-    expect(content).toContain("Nivel de Razonamiento");
-
-    // Select low effort and confirm
-    modal.handleInput("\u001b[B"); // down
-    modal.handleInput("\u001b[B"); // down
-    modal.handleInput("\r"); // enter (confirms effort)
+    expect(content).toContain("guardado");
 
     // Press 'esc' to exit editor back to main list
     modal.handleInput("\u001b");
@@ -404,20 +395,17 @@ describe("modal overlay component", () => {
 
     // Press 'e' on 'cin' (which has default_effort: "high")
     modal.handleInput("e");
-    // Press 'm' to open model picker for orchestrator
-    modal.handleInput("m");
-    // Select first model (google/gemini-2.5-flash) with enter -> opens effort picker
-    modal.handleInput("\r");
-
+    // Move to Effort column with Tab
+    modal.handleInput("\t");
     let lines = modal.render(80);
     let content = lines.join("\n");
-    expect(content).toContain("predeterminado del proveedor / sin forzar");
+    expect(content).toContain("Effort / Thinking");
+    expect(content).toContain("default (auto)");
 
-    // Index 0 in EFFORT_OPTIONS is "default"
-    // Press enter to choose "default"
+    // Press enter on default effort to apply it directly in Column 3
     modal.handleInput("\r");
 
-    // Back in editor: orchestrator should now have no explicit effort
+    // Back in editor: orchestrator should now have updated effort
     lines = modal.render(80);
     content = lines.join("\n");
     expect(content).toContain("Orquestador");
@@ -642,10 +630,10 @@ describe("modal overlay component", () => {
       expect(lines.join("\n")).toContain("Proveedores");
       expect(lines.join("\n")).toContain("Modelos disponibles");
 
-      // Press Enter to select the active model and advance to effort picker
+      // Press Enter to select the active model
       modal.handleInput("\r");
       lines = modal.render(80);
-      expect(lines.join("\n")).toContain("Nivel de Razonamiento");
+      expect(lines.join("\n")).toContain("guardado");
     });
 
     it("should ignore right clicks, move events, wheel with zero delta, or out-of-bounds clicks", () => {
@@ -1011,25 +999,22 @@ describe("modal overlay component", () => {
       // Press 'c' to jump to category in the tree
       modal.handleInput("c");
       let lines = modal.render(80);
-      expect(lines.join("\n")).toContain("Núcleo SDD");
+      expect(lines.join("\n")).toContain("SDD Core");
 
-      // Press Enter directly on Núcleo SDD to open model picker
+      // Press Enter directly on SDD Core to open model picker
       modal.handleInput("\r");
       lines = modal.render(80);
-      expect(lines.join("\n")).toContain("Categoría: Núcleo SDD");
+      expect(lines.join("\n")).toContain("Categoría: SDD Core");
 
       lines = modal.render(80);
-      expect(lines.join("\n")).toContain("Categoría: Núcleo SDD");
+      expect(lines.join("\n")).toContain("Categoría: SDD Core");
 
       // Select first model (anthropic/claude-sonnet-4-5)
-      modal.handleInput("\r"); // Enter -> opens effort picker
+      modal.handleInput("\r"); // Enter -> saves model in-place
       lines = modal.render(100);
-      expect(lines.join("\n")).toContain("Categoría: Núcleo SDD");
+      expect(lines.join("\n")).toContain("guardado");
 
-      // Select default effort
-      modal.handleInput("\r"); // Enter -> confirms and saves!
-
-      // Verify createProfile was called with updated agents in Núcleo SDD
+      // Verify createProfile was called with updated agents in SDD Core
       expect(customManager.createProfile).toHaveBeenCalledWith(
         expect.objectContaining({
           model_profiles: expect.objectContaining({
@@ -1052,19 +1037,19 @@ describe("modal overlay component", () => {
       // Jump to category
       modal.handleInput("c");
       let lines = modal.render(100);
-      expect(lines.join("\n")).toContain("▼ 📦 Núcleo SDD");
+      expect(lines.join("\n")).toContain("▼ 📦 SDD Core");
       expect(lines.join("\n")).toContain("sdd-explore");
 
-      // Press Space to collapse Núcleo SDD
+      // Press Space to collapse SDD Core
       modal.handleInput(" ");
       lines = modal.render(100);
-      expect(lines.join("\n")).toContain("► 📦 Núcleo SDD");
+      expect(lines.join("\n")).toContain("► 📦 SDD Core");
       expect(lines.join("\n")).not.toContain("sdd-explore");
 
       // Press Space again to re-expand
       modal.handleInput(" ");
       lines = modal.render(100);
-      expect(lines.join("\n")).toContain("▼ 📦 Núcleo SDD");
+      expect(lines.join("\n")).toContain("▼ 📦 SDD Core");
       expect(lines.join("\n")).toContain("sdd-explore");
     });
   });
@@ -1111,17 +1096,12 @@ describe("modal overlay component", () => {
 
       // Now open model picker on orchestrator and select gpt-4o
       modal.handleInput("m");
-      modal.handleInput("\r"); // Enter -> opens effort-picker
+      modal.handleInput("\r"); // Enter -> saves model in-place
 
       lines = modal.render(120);
       content = lines.join("\n");
-      expect(content).toContain("este modelo no utiliza niveles de razonamiento");
-      expect(content).not.toContain("xhigh");
-      expect(content).not.toContain("máxima profundidad");
-
-      // Pressing down shouldn't crash or advance beyond 0
-      modal.handleInput("\u001b[B"); // down
-      modal.handleInput("\r"); // Enter confirms default
+      expect(content).toContain("guardado");
+      expect(content).toContain("(sin razonamiento)");
 
       expect(customManager.createProfile).toHaveBeenCalled();
     });
@@ -1516,16 +1496,20 @@ describe("modal overlay component", () => {
       expect(content).toContain("Modelos disponibles");
       expect(content).toContain("│");
 
-      // Verify providers are listed on left with count
-      expect(content).toContain("cpamc/cin82");
+      // Verify that current assigned model is shown in the header
+      expect(content).toContain("Actual:");
+      expect(content).toContain("gemini-3.8-flash-high");
+
+      // Verify providers are listed on left with clean account names and counts
+      expect(content).toContain("cin82");
       expect(content).toContain("(1)");
-      expect(content).toContain("cpamc/cinlo");
+      expect(content).toContain("cinlo");
       expect(content).toContain("(2)");
       expect(content).toContain("anthropic");
       expect(content).toContain("google");
       expect(content).toContain("openai");
 
-      // By default, first provider cpamc/cin82 is selected, showing its clean models on the right
+      // By default, first provider cin82 is selected, showing its clean models on the right
       expect(content).toContain("gemini-pro");
 
       // Switch active pane to providers with Tab
@@ -1534,11 +1518,11 @@ describe("modal overlay component", () => {
       content = lines.join("\n");
       expect(content).toContain("› Proveedores");
 
-      // Navigate down to cpamc/cinlo
+      // Navigate down to cinlo
       modal.handleInput("\u001b[B"); // down
       lines = modal.render(100);
       content = lines.join("\n");
-      // Right side now updates to show cpamc/cinlo's models!
+      // Right side now updates to show cinlo's models!
       expect(content).toContain("gemini-3.8-flash-high");
       expect(content).toContain("gpt-oss-120b-medium");
       expect(content).not.toContain("gemini-pro");
@@ -1554,10 +1538,76 @@ describe("modal overlay component", () => {
       lines = modal.render(100);
       expect(lines.join("\n")).toContain("› Modelos disponibles");
 
-      // Press Enter to pick the model and advance to effort picker
+      // Press Enter to pick the model in-place
       modal.handleInput("\r");
       lines = modal.render(100);
-      expect(lines.join("\n")).toContain("Nivel de Razonamiento");
+      expect(lines.join("\n")).toContain("guardado");
+      expect(lines.join("\n")).toContain("claude-3-7-sonnet");
+    });
+
+    it("should display current category model and never overwrite orchestrator when assigning category", () => {
+      const done = vi.fn();
+      const profileData: any = {
+        name: "test-category-isolation",
+        default_model: "google/gemini-orchestrator",
+        model_profiles: {
+          "sdd-explore": { model: "anthropic/claude-3-7-sonnet" },
+          "sdd-propose": { model: "anthropic/claude-3-7-sonnet" },
+          "sdd-spec": { model: "anthropic/claude-3-7-sonnet" },
+          "sdd-design": { model: "anthropic/claude-3-7-sonnet" },
+          "sdd-tasks": { model: "anthropic/claude-3-7-sonnet" },
+          "sdd-apply": { model: "anthropic/claude-3-7-sonnet" },
+          "sdd-verify": { model: "anthropic/claude-3-7-sonnet" },
+          "sdd-archive": { model: "anthropic/claude-3-7-sonnet" },
+        },
+      };
+
+      const customManager: any = {
+        listProfiles: vi.fn(() => [{ name: "test-category-isolation", is_active: true }]),
+        getActiveProfileName: vi.fn(() => "test-category-isolation"),
+        getProfile: vi.fn(() => profileData),
+        createProfile: vi.fn((p) => {
+          Object.assign(profileData, p);
+          return { success: true, profile: p };
+        }),
+      };
+
+      const modal = createSddProfilesModal({
+        manager: customManager,
+        availableModels: [
+          "anthropic/claude-3-7-sonnet",
+          "openai/o3-mini",
+          "google/gemini-orchestrator",
+        ],
+        done,
+      });
+
+      // Navigate to SDD Core category
+      modal.handleInput("c");
+      // Open model picker on category
+      modal.handleInput("\r");
+
+      let lines = modal.render(100);
+      let content = lines.join("\n");
+
+      // Verify category target is displayed
+      expect(content).toContain("Categoría: SDD Core");
+      // Verify currently assigned model for this category is displayed!
+      expect(content).toContain("Actual:");
+      expect(content).toContain("claude-3-7-sonnet");
+
+      // Select openai/o3-mini
+      modal.handleInput("o");
+      modal.handleInput("3");
+      modal.handleInput("\r"); // Selects model in-place
+
+      // Verify createProfile was called
+      expect(customManager.createProfile).toHaveBeenCalled();
+      // Crucial assertion: Orchestrator's default_model must remain untouched!
+      expect(profileData.default_model).toBe("google/gemini-orchestrator");
+      // All SDD Core agents must be updated to openai/o3-mini
+      expect(profileData.model_profiles["sdd-explore"].model).toBe("openai/o3-mini");
+      expect(profileData.model_profiles["sdd-archive"].model).toBe("openai/o3-mini");
     });
   });
 });

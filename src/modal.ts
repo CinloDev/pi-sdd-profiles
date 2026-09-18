@@ -277,8 +277,8 @@ export function createSddProfilesModal(input: ModalInput) {
   const extractProvider = (modelId: string): string => {
     const parts = modelId.split("/");
     if (parts.length >= 3 && parts[0] === "cpamc") {
-      // e.g. cpamc/cinlo/model -> provider is "cpamc/cinlo"
-      return `${parts[0]}/${parts[1]}`;
+      // e.g. cpamc/cin82/gemini-3.8-flash-high -> show account cleanly as "cin82"
+      return parts[1];
     }
     if (parts.length >= 2) {
       // e.g. anthropic/claude-3-7-sonnet -> "anthropic"
@@ -308,9 +308,11 @@ export function createSddProfilesModal(input: ModalInput) {
     }
 
     pickerProviders = Array.from(modelsByProvider.keys()).sort((a, b) => {
-      // Keep "cpamc" or common providers in intuitive order
-      if (a.startsWith("cpamc") && !b.startsWith("cpamc")) return -1;
-      if (!a.startsWith("cpamc") && b.startsWith("cpamc")) return 1;
+      // Prioritize personal accounts (cin82, cinlo, etc.) before standard providers
+      const aIsCin = a.startsWith("cin");
+      const bIsCin = b.startsWith("cin");
+      if (aIsCin && !bIsCin) return -1;
+      if (!aIsCin && bIsCin) return 1;
       return a.localeCompare(b);
     });
 
@@ -482,10 +484,11 @@ export function createSddProfilesModal(input: ModalInput) {
     const fullProfile = manager.getProfile(profSummary.name);
     if (!fullProfile) return;
 
+    if (!fullProfile.model_profiles) fullProfile.model_profiles = {};
+
     if (pickerTarget === "category-models" && targetCategory) {
       const cat = SDD_AGENT_CATEGORIES.find((c) => c.name === targetCategory || c.id === targetCategory);
       if (cat) {
-        if (!fullProfile.model_profiles) fullProfile.model_profiles = {};
         for (const ag of cat.agents) {
           const eff = effortVal !== undefined ? effortVal : fullProfile.model_profiles[ag]?.effort;
           fullProfile.model_profiles[ag] = {
@@ -497,9 +500,6 @@ export function createSddProfilesModal(input: ModalInput) {
       targetCategory = undefined;
       pickerTarget = "agent-model";
     } else if (pickerTarget === "all-models") {
-      fullProfile.default_model = chosenModel;
-      if (effortVal !== undefined) fullProfile.default_effort = effortVal;
-      if (!fullProfile.model_profiles) fullProfile.model_profiles = {};
       for (const ag of ALL_KNOWN_AGENTS) {
         const eff = effortVal !== undefined ? effortVal : fullProfile.model_profiles[ag]?.effort;
         fullProfile.model_profiles[ag] = {
@@ -514,7 +514,6 @@ export function createSddProfilesModal(input: ModalInput) {
     } else {
       const ag = selectedAgent();
       const eff = effortVal !== undefined ? effortVal : fullProfile.model_profiles[ag]?.effort;
-      if (!fullProfile.model_profiles) fullProfile.model_profiles = {};
       fullProfile.model_profiles[ag] = {
         model: chosenModel,
         ...(eff ? { effort: eff } : {}),
@@ -1329,12 +1328,46 @@ export function createSddProfilesModal(input: ModalInput) {
       ? `${cHeading("Perfil:")} ${cBold(cAccent(currentProfileName))} ${cBorderMuted("│")} `
       : "";
 
+    // Resolve currently assigned model for the target agent/orchestrator/category
+    const fullProfile = currentProfileName ? manager.getProfile(currentProfileName) : null;
+    let currentAssignedModel = "";
+    if (fullProfile) {
+      if (pickerTarget === "default-model" || (pickerTarget === "agent-model" && selectedAgent() === ORCHESTRATOR_AGENT_KEY)) {
+        currentAssignedModel = fullProfile.default_model ?? "";
+      } else if (pickerTarget === "category-models" && targetCategory) {
+        const cat = SDD_AGENT_CATEGORIES.find((c) => c.name === targetCategory || c.id === targetCategory);
+        if (cat && cat.agents.length > 0) {
+          const models = cat.agents.map((ag) => fullProfile.model_profiles?.[ag]?.model ?? fullProfile.default_model ?? "");
+          if (models.every((m) => m === models[0] && m)) {
+            currentAssignedModel = models[0];
+          } else {
+            currentAssignedModel = "(mixto / varios modelos)";
+          }
+        }
+      } else if (pickerTarget === "all-models") {
+        const models = ALL_KNOWN_AGENTS.map((ag) => fullProfile.model_profiles?.[ag]?.model ?? fullProfile.default_model ?? "");
+        if (models.every((m) => m === models[0] && m)) {
+          currentAssignedModel = models[0];
+        } else {
+          currentAssignedModel = "(mixto / varios modelos)";
+        }
+      } else if (pickerTarget === "agent-model") {
+        const ag = selectedAgent();
+        currentAssignedModel = fullProfile.model_profiles?.[ag]?.model ?? fullProfile.default_model ?? "";
+      }
+    }
+
+    const currentLine = currentAssignedModel
+      ? `${cHeading("Actual:")} ${cModel(currentAssignedModel)}`
+      : "";
+
     const filterBox = modelFilter
       ? `${cHeading("Filtrar:")} ${cAccent(modelFilter)}${cHighlight("█")} ${cSecondary(`(${pickerItems.length} en proveedor · ${allPickerModels.length} total)`)}`
       : `${cHeading("Filtrar:")} ${cMuted("(escribí para filtrar proveedores o modelos...)")} ${cSecondary(`(${allPickerModels.length} disponibles)`)}`;
 
     const header = [
       `${profBadge}${cHeading("Asignar modelo a:")} ${cAccent(titleTarget)}`,
+      ...(currentLine ? [currentLine] : []),
       filterBox,
       cBorderMuted("═".repeat(Math.max(10, width - 6))),
     ];
@@ -1406,11 +1439,14 @@ export function createSddProfilesModal(input: ModalInput) {
         }
 
         const cursor = isSelected ? (pickerActivePane === "models" ? cHighlight("› ") : cDim("› ")) : "  ";
+        const isCurrent = currentAssignedModel && (modelId === currentAssignedModel || cleanName === currentAssignedModel);
+        const currentBadge = isCurrent ? ` ${cSuccess("● (actual)")}` : "";
+
         const modelFormatted = isSelected
           ? (pickerActivePane === "models" ? cBold(cAccent(cleanName)) : cAccent(cleanName))
           : cModel(cleanName);
 
-        col2Lines.push(`${cursor}${modelFormatted}`);
+        col2Lines.push(`${cursor}${modelFormatted}${currentBadge}`);
       }
     }
 
@@ -2022,16 +2058,13 @@ export function createSddProfilesModal(input: ModalInput) {
             // Enter on provider moves focus to models
             pickerActivePane = "models";
           } else {
-            const chosenModel = pickerItems[pickerIndex];
-            if (chosenModel && editingProfile) {
-              // Stage model and seamlessly chain to effort-picker!
-              stagedModel = chosenModel;
-              pickerIndex = 0;
-              view = "effort-picker";
-            } else if (pickerItems.length === 0 && modelFilter.trim().includes("/")) {
-              stagedModel = modelFilter.trim();
-              pickerIndex = 0;
-              view = "effort-picker";
+            const chosenModel = pickerItems[pickerIndex] || (pickerItems.length === 0 && modelFilter.trim().includes("/") ? modelFilter.trim() : undefined);
+            if (chosenModel) {
+              // Apply model directly without disruptive screen jump
+              applyModelOption(chosenModel);
+              stagedModel = undefined;
+              view = "profile-editor";
+              activePane = "agents";
             } else {
               view = "profile-editor";
             }

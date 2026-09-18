@@ -193,19 +193,29 @@ export async function resolveModelsMetadata(ctx?: any): Promise<Record<string, M
  */
 export async function resolveAvailableModels(ctx?: any): Promise<string[]> {
   const metadataMap = await resolveModelsMetadata(ctx);
-  const modelSet = new Set<string>();
+  const rawSet = new Set<string>();
 
   for (const key of Object.keys(metadataMap)) {
     if (key.includes("/")) {
-      modelSet.add(key);
+      rawSet.add(key);
     }
   }
 
   for (const std of COMMON_STANDARD_MODELS) {
-    modelSet.add(std);
+    rawSet.add(std);
   }
 
-  return Array.from(modelSet).sort((a, b) => a.localeCompare(b));
+  // Deduplicate: If both "cpamc/<subpath>" and "<subpath>" exist in the set,
+  // prefer the canonical "cpamc/<subpath>" and filter out the unqualified duplicate.
+  const deduplicatedSet = new Set<string>();
+  for (const item of rawSet) {
+    if (!item.startsWith("cpamc/") && rawSet.has(`cpamc/${item}`)) {
+      continue;
+    }
+    deduplicatedSet.add(item);
+  }
+
+  return Array.from(deduplicatedSet).sort((a, b) => a.localeCompare(b));
 }
 
 /**
