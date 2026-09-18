@@ -210,6 +210,57 @@ export class SddProfileManager {
   }
 
   /**
+   * Exports an existing profile to an external file.
+   */
+  exportProfile(
+    name: string,
+    targetFilePath: string
+  ): { success: boolean; path?: string; message: string } {
+    try {
+      const savedPath = this.storage.exportProfile(name, targetFilePath);
+      return {
+        success: true,
+        path: savedPath,
+        message: `Perfil "${name}" exportado con éxito a "${savedPath}".`,
+      };
+    } catch (err: any) {
+      return {
+        success: false,
+        message: `Error al exportar perfil: ${err?.message ?? String(err)}`,
+      };
+    }
+  }
+
+  /**
+   * Imports a profile from an external JSON file.
+   */
+  importProfile(params: {
+    sourceFilePath: string;
+    scope?: "global" | "project";
+    overrideName?: string;
+  }): { success: boolean; profile?: Profile; path?: string; message: string } {
+    try {
+      const scope = params.scope ?? "global";
+      const res = this.storage.importProfile(
+        params.sourceFilePath,
+        scope,
+        params.overrideName
+      );
+      return {
+        success: true,
+        profile: res.profile,
+        path: res.path,
+        message: `Perfil "${res.profile.name}" importado con éxito en ${scope} (${res.path}).`,
+      };
+    } catch (err: any) {
+      return {
+        success: false,
+        message: `Error al importar perfil: ${err?.message ?? String(err)}`,
+      };
+    }
+  }
+
+  /**
    * Updates or assigns a specific agent model inside an existing profile.
    */
   setAgentInProfile(params: {

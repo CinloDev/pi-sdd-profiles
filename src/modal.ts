@@ -1,3 +1,6 @@
+import * as fs from "node:fs";
+import * as path from "node:path";
+import * as os from "node:os";
 import type { ModelProfileEntry, Profile, ProfileSummary, ReasoningEffort } from "./types.js";
 import type { TuiMouseEvent, TuiMouseEventResult } from "@earendil-works/pi-tui";
 import { ALL_KNOWN_AGENTS, SDD_AGENT_CATEGORIES, type AgentCategory } from "./catalog.js";
@@ -26,6 +29,9 @@ export type ModalView =
   | "create-profile"
   | "rename-profile"
   | "confirm-delete"
+  | "export-profile"
+  | "import-profile"
+  | "import-conflict"
   | "profile-editor"
   | "model-picker"
   | "effort-picker"
@@ -84,6 +90,75 @@ export function createSddProfilesModal(input: ModalInput) {
   let renameProfileInput = "";
   let renameErrorMessage: string | null = null;
   let deletingProfileName = "";
+
+  // State for export & import views
+  let exportingProfileName = "";
+  let exportPathInput = "";
+  let exportErrorMessage: string | null = null;
+
+  let importScope: "project" | "global" = "project";
+  let importErrorMessage: string | null = null;
+  let browserCurrentDir = os.homedir();
+  let browserEntries: Array<{ name: string; isDir: boolean; fullPath: string }> = [];
+  let browserIndex = 0;
+  let browserScrollOffset = 0;
+  let manualPathInput = "";
+  let isManualPathMode = false;
+
+  // Conflict resolution state on import
+  let pendingImportPath = "";
+  let pendingImportOriginalName = "";
+  let pendingImportSuggestedName = "";
+  let conflictRenameInput = "";
+  let conflictRenameMode = false;
+  let conflictErrorMessage: string | null = null;
+
+  const loadBrowserEntries = (dir: string) => {
+    try {
+      const dirents = fs.readdirSync(dir, { withFileTypes: true });
+      const entries: Array<{ name: string; isDir: boolean; fullPath: string }> = [];
+
+      // Add parent directory navigation if not at root
+      const parentDir = path.dirname(dir);
+      if (parentDir !== dir) {
+        entries.push({ name: ".. (Subir de nivel)", isDir: true, fullPath: parentDir });
+      }
+
+      // Collect directories and .json files
+      const dirs: Array<{ name: string; isDir: boolean; fullPath: string }> = [];
+      const files: Array<{ name: string; isDir: boolean; fullPath: string }> = [];
+
+      for (const d of dirents) {
+        // Skip hidden files/dirs except standard parent
+        if (d.name.startsWith(".")) continue;
+        const full = path.join(dir, d.name);
+        try {
+          if (d.isDirectory()) {
+            dirs.push({ name: d.name, isDir: true, fullPath: full });
+          } else if (d.isFile() && d.name.toLowerCase().endsWith(".json")) {
+            files.push({ name: d.name, isDir: false, fullPath: full });
+          }
+        } catch {
+          // Ignore permission denied or inaccessible entries
+        }
+      }
+
+      dirs.sort((a, b) => a.name.localeCompare(b.name));
+      files.sort((a, b) => a.name.localeCompare(b.name));
+
+      browserEntries = [...entries, ...dirs, ...files];
+      browserIndex = 0;
+      browserScrollOffset = 0;
+      importErrorMessage = null;
+    } catch (err: any) {
+      importErrorMessage = `No se puede leer la carpeta: ${err.message || String(err)}`;
+      browserEntries = [
+        { name: ".. (Subir de nivel)", isDir: true, fullPath: path.dirname(dir) },
+      ];
+      browserIndex = 0;
+      browserScrollOffset = 0;
+    }
+  };
 
   // Editing state for agents (Col 2)
   let editingProfile: Profile | null = null;
@@ -576,18 +651,30 @@ export function createSddProfilesModal(input: ModalInput) {
       feedbackMessage.includes("Ya existe")
     );
 
-    const shortcutDefs: ShortcutDef[] = width < 80
+    const shortcutDefs: ShortcutDef[] = width < 90
       ? [
           { keyTag: "[Enter]", label: activePane === "effort" ? "Elegir" : activePane === "agents" ? "Modelo" : "Activar", key: "\r" },
           { keyTag: "[e]", label: "Edit", key: "e" },
           { keyTag: "[n]", label: "Nuevo", key: "n" },
+          ...(activePane === "profiles"
+            ? [
+                { keyTag: "[x]", label: "Export", key: "x" },
+                { keyTag: "[i]", label: "Import", key: "i" },
+              ]
+            : []),
           { keyTag: "[Esc]", label: "Salir", key: "\u001b" },
         ]
       : [
           { keyTag: "[Enter]", label: activePane === "effort" ? "Elegir" : activePane === "agents" ? "Modelo" : "Activar", key: "\r" },
           { keyTag: "[e]", label: "Edit", key: "e" },
-          { keyTag: "[a]", label: "Todos", key: "a" },
+          ...(activePane === "agents" ? [{ keyTag: "[a]", label: "Todos", key: "a" }] : []),
           { keyTag: "[n]", label: "Nuevo", key: "n" },
+          ...(activePane === "profiles"
+            ? [
+                { keyTag: "[x]", label: "Export", key: "x" },
+                { keyTag: "[i]", label: "Import", key: "i" },
+              ]
+            : []),
           { keyTag: "[d]", label: "Borrar", key: "d" },
           { keyTag: "[Esc]", label: "Salir", key: "\u001b" },
         ];
@@ -910,6 +997,173 @@ export function createSddProfilesModal(input: ModalInput) {
     return frameModal("🗑️ Confirmar Eliminación", [...header, ...warningBody, ...footer], width, theme);
   };
 
+  // View: Export Profile
+  const renderExportProfile = (width: number): string[] => {
+    const header = [
+      cHeading("📦 Exportar perfil SDD:"),
+      `${cHeading("Perfil:")} ${cBold(cAccent(exportingProfileName))}`,
+      cText("Escribí la ruta del archivo de destino (.json) y presioná [Enter]."),
+      cBorderMuted("═".repeat(Math.max(10, width - 6))),
+    ];
+
+    const inputLine = `  ${cHeading("Ruta destino:")} ${cAccent(exportPathInput || "...")}${cHighlight("█")}`;
+    const errorLine = exportErrorMessage ? cError(`  ✖ ${exportErrorMessage}`) : "";
+
+    const shortcuts = buildShortcutsLine(7, [
+      { keyTag: "[Enter]", label: "Exportar Archivo", key: "\r" },
+      { keyTag: "[Esc]", label: "Cancelar", key: "\u001b" },
+    ], width);
+
+    const footer = [
+      cBorderMuted("═".repeat(Math.max(10, width - 6))),
+      shortcuts,
+    ];
+
+    return frameModal("📦 Exportar Perfil SDD", [...header, "", inputLine, errorLine, ...footer], width, theme);
+  };
+
+  // View: Import Profile (Universal File Browser)
+  const renderImportProfile = (width: number): string[] => {
+    const scopeProj = importScope === "project" ? cBold(cSuccess("● [1] Proyecto (.pi/profiles/)")) : cDim("○ [1] Proyecto (.pi/profiles/)");
+    const scopeGlob = importScope === "global" ? cBold(cSuccess("● [2] Global (~/.pi/agent/profiles/)")) : cDim("○ [2] Global (~/.pi/agent/profiles/)");
+    const scopeLine = `  ${cHeading("Ámbito destino:")} ${scopeProj}   ${scopeGlob}`;
+    const errorLine = importErrorMessage ? cError(`  ✖ ${importErrorMessage}`) : "";
+
+    if (isManualPathMode) {
+      const header = [
+        cHeading("📥 Importar perfil SDD (Ruta manual):"),
+        cText("Escribí o pegá la ruta completa del archivo .json y presioná [Enter]."),
+        cBorderMuted("═".repeat(Math.max(10, width - 6))),
+      ];
+
+      const inputLine = `  ${cHeading("Ruta archivo:")} ${cAccent(manualPathInput || "...")}${cHighlight("█")}`;
+
+      const shortcuts = buildShortcutsLine(8, [
+        { keyTag: "[1/2/Tab]", label: "Ámbito", key: "\t" },
+        { keyTag: "[Enter]", label: "Importar", key: "\r" },
+        { keyTag: "[Esc]", label: "Volver al explorador", key: "\u001b" },
+      ], width);
+
+      const footer = [
+        cBorderMuted("═".repeat(Math.max(10, width - 6))),
+        shortcuts,
+      ];
+
+      return frameModal("📥 Importar Perfil SDD", [...header, "", inputLine, "", scopeLine, errorLine, ...footer], width, theme);
+    }
+
+    const maxVisible = 10;
+    const clamped = clampList(browserIndex, browserScrollOffset, browserEntries.length, maxVisible);
+    browserIndex = clamped.index;
+    browserScrollOffset = clamped.scroll;
+
+    // Display home directory as '~' for aesthetics
+    const displayDir = browserCurrentDir.startsWith(os.homedir())
+      ? "~" + browserCurrentDir.slice(os.homedir().length)
+      : browserCurrentDir;
+
+    const header = [
+      cHeading("📥 Importar perfil SDD (Explorador de archivos):"),
+      `${cHeading("Carpeta actual:")} ${cAccent(displayDir || "/")}`,
+      cBorderMuted("═".repeat(Math.max(10, width - 6))),
+    ];
+
+    const listLines: string[] = [];
+    const baseOffset = header.length + 1;
+
+    if (browserEntries.length === 0) {
+      listLines.push(cDim("  (No hay carpetas ni archivos .json en esta ubicación)"));
+    } else {
+      const visibleEntries = browserEntries.slice(browserScrollOffset, browserScrollOffset + maxVisible);
+      for (const [vIdx, entry] of visibleEntries.entries()) {
+        const actualIdx = browserScrollOffset + vIdx;
+        registerItemTarget(baseOffset + vIdx, actualIdx);
+
+        const isSelected = actualIdx === browserIndex;
+        const cursor = isSelected ? cHighlight("› ") : "  ";
+        const icon = entry.isDir ? "📁 " : "📄 ";
+        const nameStyled = entry.isDir
+          ? (isSelected ? cBold(cHeading(entry.name)) : cText(entry.name))
+          : (isSelected ? cBold(cSuccess(entry.name)) : cSuccess(entry.name));
+
+        const badge = entry.isDir ? cDim(" [Carpeta]") : cSecondary(" [Perfil JSON]");
+        listLines.push(`${cursor}${icon}${nameStyled}${badge}`);
+      }
+    }
+
+    const shortcuts = buildShortcutsLine(8, [
+      { keyTag: "[Enter]", label: "Abrir / Seleccionar", key: "\r" },
+      { keyTag: "[1/2/Tab]", label: "Ámbito", key: "\t" },
+      { keyTag: "[m]", label: "Ruta Manual", key: "m" },
+      { keyTag: "[Esc]", label: "Cancelar", key: "\u001b" },
+    ], width);
+
+    const footer = [
+      cBorderMuted("═".repeat(Math.max(10, width - 6))),
+      scopeLine,
+      errorLine,
+      shortcuts,
+    ];
+
+    return frameModal("📥 Importar Perfil SDD", [...header, ...listLines, ...footer], width, theme);
+  };
+
+  // View: Import Conflict Resolution View
+  const renderImportConflict = (width: number): string[] => {
+    const header = [
+      cWarning("⚠️ Conflicto al importar perfil SDD"),
+      `${cHeading("El perfil ya existe:")} ${cBold(cAccent(pendingImportOriginalName))}`,
+      `${cHeading("Origen:")} ${cDim(pendingImportPath)}`,
+      cBorderMuted("═".repeat(Math.max(10, width - 6))),
+    ];
+
+    if (conflictRenameMode) {
+      const renameHeader = [
+        cText("  Escribí un nuevo nombre para el perfil importado y presioná [Enter]:"),
+        "",
+        `    ${cHeading("Nuevo nombre:")} ${cAccent(conflictRenameInput || "...")}${cHighlight("█")}`,
+        conflictErrorMessage ? cError(`    ✖ ${conflictErrorMessage}`) : "",
+        "",
+      ];
+
+      const shortcuts = buildShortcutsLine(6, [
+        { keyTag: "[Enter]", label: "Guardar e Importar", key: "\r" },
+        { keyTag: "[Esc]", label: "Volver", key: "\u001b" },
+      ], width);
+
+      const footer = [
+        cBorderMuted("═".repeat(Math.max(10, width - 6))),
+        shortcuts,
+      ];
+
+      return frameModal("✏️ Renombrar Perfil Importado", [...header, ...renameHeader, ...footer], width, theme);
+    }
+
+    const body = [
+      "",
+      cText("  Ya existe un perfil con este nombre en tu configuración."),
+      cText("  ¿Cómo deseás proceder?"),
+      "",
+      `  ${cHeading("[1 / o]")} ${cBold(cWarning("Sobreescribir"))} ${cDim("Reemplazar el perfil existente con el del archivo")}`,
+      `  ${cHeading("[2 / r]")} ${cBold(cSuccess("Renombrar"))}     ${cDim(`Importar con otro nombre (sugerido: "${pendingImportSuggestedName}")`)}`,
+      `  ${cHeading("[Esc]")}   ${cBold(cText("Cancelar"))}      ${cDim("Descartar importación y volver")}`,
+      "",
+    ];
+
+    const shortcuts = buildShortcutsLine(6, [
+      { keyTag: "[1 / o]", label: "Sobreescribir", key: "1" },
+      { keyTag: "[2 / r]", label: "Renombrar", key: "2" },
+      { keyTag: "[Esc]", label: "Cancelar", key: "\u001b" },
+    ], width);
+
+    const footer = [
+      cBorderMuted("═".repeat(Math.max(10, width - 6))),
+      shortcuts,
+    ];
+
+    return frameModal("⚠️ Conflicto de Perfil", [...header, ...body, ...footer], width, theme);
+  };
+
   // View: Choose Scope
   const renderChooseScope = (width: number): string[] => {
     if (!activatingProfile) return ["Error: perfil no seleccionado"];
@@ -1162,6 +1416,73 @@ export function createSddProfilesModal(input: ModalInput) {
     return frameModal("📦 Elegir Categoría", [...header, ...listLines], width, theme);
   };
 
+    // Helper to attempt import and trigger conflict resolution if name already exists
+    const tryImportWithConflictCheck = (filePath: string) => {
+      let candidateName = "";
+      try {
+        const expanded = filePath.startsWith("~/") || filePath === "~"
+          ? path.join(os.homedir(), filePath.slice(1))
+          : filePath;
+        const resolved = path.resolve(expanded);
+        if (fs.existsSync(resolved)) {
+          const parsed = JSON.parse(fs.readFileSync(resolved, "utf-8"));
+          if (parsed && typeof parsed.name === "string" && parsed.name.trim()) {
+            candidateName = parsed.name.trim();
+          }
+        }
+      } catch {
+        // Let manager.importProfile handle parsing and validation errors
+      }
+
+      if (candidateName) {
+        // Check if profile with candidateName already exists
+        const existing = manager.getProfile(candidateName);
+        if (existing) {
+          // Name collision! Prompt user for resolution
+          pendingImportPath = filePath;
+          pendingImportOriginalName = candidateName;
+
+          // Suggest alternative name based on filename or suffix
+          const baseFileName = path.basename(filePath, path.extname(filePath));
+          let suggested = baseFileName && baseFileName !== candidateName ? baseFileName : `${candidateName}-imported`;
+          let counter = 2;
+          while (manager.getProfile(suggested)) {
+            suggested = `${candidateName}-imported-${counter++}`;
+          }
+          pendingImportSuggestedName = suggested;
+          conflictRenameInput = suggested;
+          conflictRenameMode = false;
+          conflictErrorMessage = null;
+          view = "import-conflict";
+          return;
+        }
+      }
+
+      // No collision or file to be validated by manager: perform direct import
+      executeImport(filePath, undefined);
+    };
+
+    const executeImport = (filePath: string, overrideName?: string) => {
+      const res = manager.importProfile({ sourceFilePath: filePath, scope: importScope, overrideName });
+      if (res.success && res.profile) {
+        refreshProfiles();
+        const newIdx = profiles.findIndex((p) => p.name.toLowerCase() === res.profile!.name.toLowerCase());
+        if (newIdx !== -1) selectedProfileIndex = newIdx;
+        syncEditingProfile();
+        feedbackMessage = `Perfil "${res.profile.name}" importado con éxito en ${importScope}.`;
+        view = "profiles-list";
+        manualPathInput = "";
+        isManualPathMode = false;
+        importErrorMessage = null;
+        pendingImportPath = "";
+      } else {
+        importErrorMessage = res.message;
+        if (view === "import-conflict") {
+          conflictErrorMessage = res.message;
+        }
+      }
+    };
+
   const modalComponent = {
     render(width: number): string[] {
       clickTargets = [];
@@ -1180,6 +1501,9 @@ export function createSddProfilesModal(input: ModalInput) {
       if (view === "create-profile") return constrainLines(renderCreateProfile(width), width);
       if (view === "rename-profile") return constrainLines(renderRenameProfile(width), width);
       if (view === "confirm-delete") return constrainLines(renderConfirmDelete(width), width);
+      if (view === "export-profile") return constrainLines(renderExportProfile(width), width);
+      if (view === "import-profile") return constrainLines(renderImportProfile(width), width);
+      if (view === "import-conflict") return constrainLines(renderImportConflict(width), width);
       if (view === "profile-editor") return constrainLines(renderProfileEditor(width), width);
       if (view === "model-picker") return constrainLines(renderModelPicker(width), width);
       if (view === "effort-picker") return constrainLines(renderEffortPicker(width), width);
@@ -1313,6 +1637,155 @@ export function createSddProfilesModal(input: ModalInput) {
           feedbackMessage = `Perfil "${deletingProfileName}" eliminado correctamente.`;
           deletingProfileName = "";
           view = "profiles-list";
+        }
+        requestRender();
+        return;
+      }
+
+      // --- Sub-View: Export Profile ---
+      if (view === "export-profile") {
+        if (key === "esc") {
+          view = "profiles-list";
+          exportPathInput = "";
+          exportErrorMessage = null;
+        } else if (key === "backspace") {
+          exportPathInput = exportPathInput.slice(0, -1);
+          exportErrorMessage = null;
+        } else if (key === "enter") {
+          const trimmed = exportPathInput.trim();
+          if (!trimmed) {
+            exportErrorMessage = "La ruta de destino no puede estar vacía.";
+          } else {
+            const res = manager.exportProfile(exportingProfileName, trimmed);
+            if (res.success) {
+              feedbackMessage = `Perfil "${exportingProfileName}" exportado con éxito a "${trimmed}".`;
+              view = "profiles-list";
+              exportPathInput = "";
+              exportErrorMessage = null;
+            } else {
+              exportErrorMessage = res.message;
+            }
+          }
+        } else if (data.length === 1 && /^[\w\-\.\/ ~:@+]$/.test(data)) {
+          exportPathInput += data;
+          exportErrorMessage = null;
+        }
+        requestRender();
+        return;
+      }
+
+      // --- Sub-View: Import Profile (Universal File Browser & Manual Mode) ---
+      if (view === "import-profile") {
+        if (isManualPathMode) {
+          if (key === "esc") {
+            isManualPathMode = false;
+            manualPathInput = "";
+            importErrorMessage = null;
+          } else if (key === "backspace") {
+            manualPathInput = manualPathInput.slice(0, -1);
+            importErrorMessage = null;
+          } else if (key === "1") {
+            importScope = "project";
+          } else if (key === "2") {
+            importScope = "global";
+          } else if (key === "tab") {
+            importScope = importScope === "project" ? "global" : "project";
+          } else if (key === "enter") {
+            const trimmed = manualPathInput.trim();
+            if (!trimmed) {
+              importErrorMessage = "La ruta del archivo no puede estar vacía.";
+            } else {
+              tryImportWithConflictCheck(trimmed);
+            }
+          } else if (data.length === 1 && /^[\w\-\.\/ ~:@+]$/.test(data)) {
+            manualPathInput += data;
+            importErrorMessage = null;
+          }
+          requestRender();
+          return;
+        }
+
+        // Browser mode
+        if (key === "esc") {
+          view = "profiles-list";
+          importErrorMessage = null;
+        } else if (key === "1") {
+          importScope = "project";
+        } else if (key === "2") {
+          importScope = "global";
+        } else if (key === "tab") {
+          importScope = importScope === "project" ? "global" : "project";
+        } else if (key === "m") {
+          isManualPathMode = true;
+          manualPathInput = "";
+          importErrorMessage = null;
+        } else if (key === "up") {
+          browserIndex = Math.max(0, browserIndex - 1);
+        } else if (key === "down") {
+          browserIndex = Math.min(browserEntries.length - 1, browserIndex + 1);
+        } else if (key === "pageup") {
+          browserIndex = Math.max(0, browserIndex - 5);
+        } else if (key === "pagedown") {
+          browserIndex = Math.min(browserEntries.length - 1, browserIndex + 5);
+        } else if (key === "home") {
+          browserIndex = 0;
+        } else if (key === "end") {
+          browserIndex = Math.max(0, browserEntries.length - 1);
+        } else if (key === "enter") {
+          const selected = browserEntries[browserIndex];
+          if (selected) {
+            if (selected.isDir) {
+              browserCurrentDir = selected.fullPath;
+              loadBrowserEntries(browserCurrentDir);
+            } else {
+              // It is a .json file, attempt import with conflict check
+              tryImportWithConflictCheck(selected.fullPath);
+            }
+          }
+        }
+        requestRender();
+        return;
+      }
+
+      // --- Sub-View: Import Conflict Resolution ---
+      if (view === "import-conflict") {
+        if (conflictRenameMode) {
+          if (key === "esc") {
+            conflictRenameMode = false;
+            conflictErrorMessage = null;
+          } else if (key === "backspace") {
+            conflictRenameInput = conflictRenameInput.slice(0, -1);
+            conflictErrorMessage = null;
+          } else if (key === "enter") {
+            const trimmed = conflictRenameInput.trim();
+            if (!trimmed) {
+              conflictErrorMessage = "El nombre no puede estar vacío.";
+            } else if (manager.getProfile(trimmed)) {
+              conflictErrorMessage = `Ya existe un perfil con el nombre "${trimmed}".`;
+            } else {
+              executeImport(pendingImportPath, trimmed);
+            }
+          } else if (data.length === 1 && /^[\w\-\. ]$/.test(data)) {
+            conflictRenameInput += data;
+            conflictErrorMessage = null;
+          }
+          requestRender();
+          return;
+        }
+
+        // Choice mode: Overwrite [1/o], Rename [2/r], Cancel [Esc]
+        if (key === "esc") {
+          view = "import-profile";
+          pendingImportPath = "";
+          conflictErrorMessage = null;
+        } else if (key === "1" || key === "o" || key === "O") {
+          // Overwrite existing profile
+          executeImport(pendingImportPath, pendingImportOriginalName);
+        } else if (key === "2" || key === "r" || key === "R") {
+          // Open Rename sub-mode
+          conflictRenameMode = true;
+          conflictRenameInput = pendingImportSuggestedName;
+          conflictErrorMessage = null;
         }
         requestRender();
         return;
@@ -1668,6 +2141,30 @@ export function createSddProfilesModal(input: ModalInput) {
           feedbackMessage = null;
           view = "confirm-delete";
         }
+        requestRender();
+        return;
+      }
+      if (key === "x") {
+        const target = selectedProfile();
+        if (target) {
+          exportingProfileName = target.name;
+          exportPathInput = `~/${target.name}.json`;
+          exportErrorMessage = null;
+          feedbackMessage = null;
+          view = "export-profile";
+        }
+        requestRender();
+        return;
+      }
+      if (key === "i") {
+        importScope = "project";
+        importErrorMessage = null;
+        feedbackMessage = null;
+        isManualPathMode = false;
+        manualPathInput = "";
+        browserCurrentDir = os.homedir();
+        loadBrowserEntries(browserCurrentDir);
+        view = "import-profile";
         requestRender();
         return;
       }
