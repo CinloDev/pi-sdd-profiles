@@ -66,6 +66,7 @@ export interface FrameModalOptions {
   paddingY?: number;
   paddingTop?: number;
   paddingBottom?: number;
+  showCloseButton?: boolean;
 }
 
 export function frameModal(
@@ -81,6 +82,7 @@ export function frameModal(
   const paddingX = options.paddingX ?? 2;
   const paddingTop = options.paddingTop ?? options.paddingY ?? 1;
   const paddingBottom = options.paddingBottom ?? options.paddingY ?? 1;
+  const showClose = options.showCloseButton ?? true;
 
   const innerWidth = safeWidth - 2;
   const contentWidth = Math.max(1, innerWidth - (paddingX * 2));
@@ -98,12 +100,20 @@ export function frameModal(
     }
   };
 
-  const titleFormatted = safeFg("accent", ` ${title} `, "text");
+  const closeBtnText = "[ x ]";
+  const closeBtnLen = showClose ? visibleWidth(closeBtnText) : 0;
+  const closeBtnFormatted = showClose ? safeFg("error", closeBtnText, "text") : "";
+
+  const maxTitleWidth = Math.max(10, innerWidth - (showClose ? closeBtnLen + 3 : 2));
+  const clippedTitle = truncateToWidth(title, maxTitleWidth - 2);
+  const titleFormatted = safeFg("accent", ` ${clippedTitle} `, "text");
   const borderChar = (char: string) => safeFg("borderAccent", char, "border");
 
   const visibleTitleLen = visibleWidth(titleFormatted);
-  const rightDashesCount = Math.max(0, innerWidth - visibleTitleLen);
-  const top = `${borderChar("╔")}${titleFormatted}${borderChar("═".repeat(rightDashesCount))}${borderChar("╗")}`;
+  const dashesCount = Math.max(0, innerWidth - visibleTitleLen - (showClose ? closeBtnLen + 1 : 0));
+  const top = showClose
+    ? `${borderChar("╔")}${titleFormatted}${borderChar("═".repeat(dashesCount))} ${closeBtnFormatted}${borderChar("╗")}`
+    : `${borderChar("╔")}${titleFormatted}${borderChar("═".repeat(dashesCount))}${borderChar("╗")}`;
   const bottom = `${borderChar("╚")}${borderChar("═".repeat(innerWidth))}${borderChar("╝")}`;
 
   const padLeft = " ".repeat(paddingX);
@@ -194,11 +204,17 @@ export function normalizeModalKey(data: string): string {
   if (matchesKey(data, Key.backspace) || data === "\u007f" || data === "\b") {
     return "backspace";
   }
+  if (matchesKey(data, Key.space) || data === " ") {
+    return "space";
+  }
   if (matchesKey(data, Key.tab) || data === "\t") {
     return "tab";
   }
   if (data === "\u001b[Z") {
     return "backtab";
+  }
+  if (data === "\u0011") {
+    return "ctrl+q";
   }
   return data;
 }
