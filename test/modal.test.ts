@@ -1022,15 +1022,15 @@ describe("modal overlay component", () => {
         done,
       });
 
-      // Press 'c' to open category picker
+      // Press 'c' to jump to category in the tree
       modal.handleInput("c");
       let lines = modal.render(80);
-      expect(lines.join("\n")).toContain("Elegir Categoría");
       expect(lines.join("\n")).toContain("Núcleo SDD");
 
-      // Row 0 is Orchestrator, Row 1 is Núcleo SDD
-      modal.handleInput("\u001b[B"); // Move to Núcleo SDD
-      modal.handleInput("\r"); // Enter -> opens model picker for Núcleo SDD
+      // Press Enter directly on Núcleo SDD to open model picker
+      modal.handleInput("\r");
+      lines = modal.render(80);
+      expect(lines.join("\n")).toContain("Categoría: Núcleo SDD");
 
       lines = modal.render(80);
       expect(lines.join("\n")).toContain("Categoría: Núcleo SDD");
@@ -1053,6 +1053,33 @@ describe("modal overlay component", () => {
           }),
         })
       );
+    });
+
+    it("should toggle expand and collapse of categories in accordion tree using Space", () => {
+      const done = vi.fn();
+      const modal = createSddProfilesModal({
+        manager: mockManager,
+        availableModels,
+        done,
+      });
+
+      // Jump to category
+      modal.handleInput("c");
+      let lines = modal.render(100);
+      expect(lines.join("\n")).toContain("▼ 📦 Núcleo SDD");
+      expect(lines.join("\n")).toContain("sdd-explore");
+
+      // Press Space to collapse Núcleo SDD
+      modal.handleInput(" ");
+      lines = modal.render(100);
+      expect(lines.join("\n")).toContain("► 📦 Núcleo SDD");
+      expect(lines.join("\n")).not.toContain("sdd-explore");
+
+      // Press Space again to re-expand
+      modal.handleInput(" ");
+      lines = modal.render(100);
+      expect(lines.join("\n")).toContain("▼ 📦 Núcleo SDD");
+      expect(lines.join("\n")).toContain("sdd-explore");
     });
   });
 });
