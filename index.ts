@@ -9,7 +9,7 @@ import {
   type UiContext,
 } from "./src/ui.js";
 import { createSddProfilesModal } from "./src/modal.js";
-import { resolveAvailableModels, resolveModelsMetadata } from "./src/models-resolver.js";
+import { resolveAvailableModels } from "./src/models-resolver.js";
 import { parseReasoningEffort, type ReasoningEffort } from "./src/types.js";
 import {
   resolveShortcutsConfig,
@@ -176,13 +176,11 @@ export default function sddProfilesExtension(pi: any): void {
   const openProfilesModalOrFallback = async (manager: SddProfileManager, boundCtx: UiContext) => {
     if (typeof (boundCtx.ui as any)?.custom === "function") {
       const availableModels = await resolveAvailableModels(boundCtx);
-      const modelsMetadata = await resolveModelsMetadata(boundCtx);
       return (boundCtx.ui as any).custom(
         (tui: any, theme: any, _keybindings: any, done: (result?: any) => void) =>
           createSddProfilesModal({
             manager,
             availableModels,
-            modelsMetadata,
             theme,
             tui,
             onProfileActivated: async (p) => {
