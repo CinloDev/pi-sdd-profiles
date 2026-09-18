@@ -1191,4 +1191,33 @@ describe("modal overlay component", () => {
       expect(content).not.toContain("max");
     });
   });
+
+  describe("footer soft divider", () => {
+    it("should render a subtle divider line separating active panel info and shortcuts", () => {
+      const done = vi.fn();
+      const modal = createSddProfilesModal({
+        manager: mockManager,
+        availableModels,
+        done,
+      });
+
+      const lines = modal.render(100);
+      const content = lines.join("\n");
+
+      // Verify presence of panel info, divider line, and shortcuts
+      expect(content).toContain("Panel activo: Perfiles");
+      expect(content).toContain("[Enter]");
+
+      const panelLineIdx = lines.findIndex((l) => l.includes("Panel activo:"));
+      expect(panelLineIdx).toBeGreaterThan(-1);
+
+      // The line right after panel info should be the divider line containing horizontal rule
+      const dividerLine = lines[panelLineIdx + 1];
+      expect(dividerLine).toContain("─");
+
+      // The line after divider should be the shortcuts line
+      const shortcutsLine = lines[panelLineIdx + 2];
+      expect(shortcutsLine).toContain("[Enter]");
+    });
+  });
 });
