@@ -194,7 +194,11 @@ export function createSddProfilesModal(input: ModalInput) {
       },
     ];
 
-    for (const cat of SDD_AGENT_CATEGORIES) {
+    const categories = manager.getCategories
+      ? manager.getCategories(editingProfile ?? undefined)
+      : SDD_AGENT_CATEGORIES;
+
+    for (const cat of categories) {
       const isExpanded = expandedCategories.has(cat.id);
       items.push({
         type: "category",
@@ -436,7 +440,10 @@ export function createSddProfilesModal(input: ModalInput) {
     if (pickerTarget === "all-models" || item.type === "all-subagents" || item.type === "all-effort") {
       if (effortVal) fullProfile.default_effort = effortVal;
       else delete fullProfile.default_effort;
-      for (const ag of ALL_KNOWN_AGENTS) {
+      const allAgents = manager.getAllAgents
+        ? manager.getAllAgents(fullProfile)
+        : ALL_KNOWN_AGENTS;
+      for (const ag of allAgents) {
         const entryModel = fullProfile.model_profiles[ag]?.model ?? fullProfile.default_model ?? "default";
         if (effortVal) {
           fullProfile.model_profiles[ag] = { model: entryModel, effort: effortVal };
@@ -450,8 +457,13 @@ export function createSddProfilesModal(input: ModalInput) {
       if (effortVal) fullProfile.default_effort = effortVal;
       else delete fullProfile.default_effort;
       feedbackMessage = `Esfuerzo "${effort}" guardado para Orquestador.`;
-    } else if (item.type === "category" && item.category) {
-      for (const ag of item.category.agents) {
+    } else if (item.type === "category") {
+      const categories = manager.getCategories
+        ? manager.getCategories(fullProfile)
+        : SDD_AGENT_CATEGORIES;
+      const cat = categories.find((c) => c.name === item.name || c.id === item.id) ?? item.category;
+      const agents = cat?.agents ?? [];
+      for (const ag of agents) {
         const currentModel = fullProfile.model_profiles[ag]?.model ?? fullProfile.default_model ?? "default";
         if (effortVal) {
           fullProfile.model_profiles[ag] = { model: currentModel, effort: effortVal };
@@ -487,7 +499,10 @@ export function createSddProfilesModal(input: ModalInput) {
     if (!fullProfile.model_profiles) fullProfile.model_profiles = {};
 
     if (pickerTarget === "category-models" && targetCategory) {
-      const cat = SDD_AGENT_CATEGORIES.find((c) => c.name === targetCategory || c.id === targetCategory);
+      const categories = manager.getCategories
+        ? manager.getCategories(fullProfile)
+        : SDD_AGENT_CATEGORIES;
+      const cat = categories.find((c) => c.name === targetCategory || c.id === targetCategory);
       if (cat) {
         for (const ag of cat.agents) {
           const eff = effortVal !== undefined ? effortVal : fullProfile.model_profiles[ag]?.effort;
@@ -500,7 +515,10 @@ export function createSddProfilesModal(input: ModalInput) {
       targetCategory = undefined;
       pickerTarget = "agent-model";
     } else if (pickerTarget === "all-models") {
-      for (const ag of ALL_KNOWN_AGENTS) {
+      const allAgents = manager.getAllAgents
+        ? manager.getAllAgents(fullProfile)
+        : ALL_KNOWN_AGENTS;
+      for (const ag of allAgents) {
         const eff = effortVal !== undefined ? effortVal : fullProfile.model_profiles[ag]?.effort;
         fullProfile.model_profiles[ag] = {
           model: chosenModel,
@@ -1335,7 +1353,10 @@ export function createSddProfilesModal(input: ModalInput) {
       if (pickerTarget === "default-model" || (pickerTarget === "agent-model" && selectedAgent() === ORCHESTRATOR_AGENT_KEY)) {
         currentAssignedModel = fullProfile.default_model ?? "";
       } else if (pickerTarget === "category-models" && targetCategory) {
-        const cat = SDD_AGENT_CATEGORIES.find((c) => c.name === targetCategory || c.id === targetCategory);
+        const categories = manager.getCategories
+          ? manager.getCategories(fullProfile)
+          : SDD_AGENT_CATEGORIES;
+        const cat = categories.find((c) => c.name === targetCategory || c.id === targetCategory);
         if (cat && cat.agents.length > 0) {
           const models = cat.agents.map((ag) => fullProfile.model_profiles?.[ag]?.model ?? fullProfile.default_model ?? "");
           if (models.every((m) => m === models[0] && m)) {
@@ -1345,7 +1366,10 @@ export function createSddProfilesModal(input: ModalInput) {
           }
         }
       } else if (pickerTarget === "all-models") {
-        const models = ALL_KNOWN_AGENTS.map((ag) => fullProfile.model_profiles?.[ag]?.model ?? fullProfile.default_model ?? "");
+        const allAgents = manager.getAllAgents
+          ? manager.getAllAgents(fullProfile)
+          : ALL_KNOWN_AGENTS;
+        const models = allAgents.map((ag) => fullProfile.model_profiles?.[ag]?.model ?? fullProfile.default_model ?? "");
         if (models.every((m) => m === models[0] && m)) {
           currentAssignedModel = models[0];
         } else {
@@ -1582,9 +1606,13 @@ export function createSddProfilesModal(input: ModalInput) {
       cBorderMuted("═".repeat(Math.max(10, width - 6))),
     ];
 
+    const categories = manager.getCategories
+      ? manager.getCategories(editingProfile ?? undefined)
+      : SDD_AGENT_CATEGORIES;
+
     const categoryRows = [
       { name: "👑 Orquestador (Sesión Principal)", count: 1 },
-      ...SDD_AGENT_CATEGORIES.map((cat) => ({ name: cat.name, count: cat.agents.length })),
+      ...categories.map((cat) => ({ name: cat.name, count: cat.agents.length })),
     ];
 
     const listLines: string[] = [];
@@ -2112,18 +2140,21 @@ export function createSddProfilesModal(input: ModalInput) {
 
       // --- Sub-View: Category Picker ---
       if (view === "category-picker") {
+        const categories = manager.getCategories
+          ? manager.getCategories(editingProfile ?? undefined)
+          : SDD_AGENT_CATEGORIES;
         if (key === "esc" || key === "q") {
           view = "profiles-list";
         } else if (key === "up" || key === "k") {
           pickerIndex = Math.max(0, pickerIndex - 1);
         } else if (key === "down" || key === "j") {
-          pickerIndex = Math.min(SDD_AGENT_CATEGORIES.length, pickerIndex + 1);
+          pickerIndex = Math.min(categories.length, pickerIndex + 1);
         } else if (key === "enter") {
           if (pickerIndex === 0) {
             // Orquestador
             openModelPicker("default-model");
           } else {
-            const cat = SDD_AGENT_CATEGORIES[pickerIndex - 1];
+            const cat = categories[pickerIndex - 1];
             if (cat) {
               openModelPicker("category-models", cat.name);
             }

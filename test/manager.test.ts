@@ -3,6 +3,14 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
 import { SddProfileManager } from "../src/manager.js";
+import {
+  ALL_KNOWN_AGENTS,
+  CUSTOM_CATEGORY_ID,
+  SDD_AGENT_CATEGORIES,
+  buildCustomCategory,
+  isSyntheticAgentKey,
+  resolveCategories,
+} from "../src/catalog.js";
 import type { Profile, SubagentsConfigFile } from "../src/types.js";
 
 describe("manager module", () => {
@@ -262,5 +270,167 @@ describe("manager module", () => {
     // Test import failure on invalid path
     const failImport = manager.importProfile({ sourceFilePath: "does-not-exist.json" });
     expect(failImport.success).toBe(false);
+  });
+
+  describe("dynamic agent discovery and catalog helpers", () => {
+    it("should identify synthetic agent keys correctly", () => {
+      expect(isSyntheticAgentKey("⚡ [Asignar un mismo modelo a TODOS...]")).toBe(true);
+      expect(isSyntheticAgentKey("🧠 [Asignar esfuerzo...]")).toBe(true);
+      expect(isSyntheticAgentKey("📦 [Asignar modelo por Categoría...]")).toBe(true);
+      expect(isSyntheticAgentKey("👑 Orchestrator")).toBe(true);
+      expect(isSyntheticAgentKey("[Asignar modelo]")).toBe(true);
+      expect(isSyntheticAgentKey("agent with spaces")).toBe(true);
+      expect(isSyntheticAgentKey("")).toBe(true);
+      expect(isSyntheticAgentKey(null as any)).toBe(true);
+      expect(isSyntheticAgentKey(undefined as any)).toBe(true);
+
+      expect(isSyntheticAgentKey("sdd-explore")).toBe(false);
+      expect(isSyntheticAgentKey("my-custom-subagent")).toBe(false);
+      expect(isSyntheticAgentKey("agent_backend_1")).toBe(false);
+    });
+
+    it("should build custom category and resolve categories correctly", () => {
+      expect(buildCustomCategory([])).toBeNull();
+
+      const customCat = buildCustomCategory(["beta-agent", "alpha-agent"]);
+      expect(customCat).not.toBeNull();
+      expect(customCat?.id).toBe(CUSTOM_CATEGORY_ID);
+      expect(customCat?.id).toBe("custom");
+      expect(customCat?.name).toBe("Custom Agents");
+      expect(customCat?.description).toBe("Custom subagents discovered from configuration and profiles");
+      expect(customCat?.agents).toEqual(["alpha-agent", "beta-agent"]);
+
+      const defaultResolved = resolveCategories([]);
+      expect(defaultResolved.length).toBe(SDD_AGENT_CATEGORIES.length);
+      expect(defaultResolved.map((c) => c.id)).not.toContain("custom");
+
+      const withCustom = resolveCategories(["custom-1"]);
+      expect(withCustom.length).toBe(SDD_AGENT_CATEGORIES.length + 1);
+      expect(withCustom[withCustom.length - 1].id).toBe("custom");
+      expect(withCustom[withCustom.length - 1].agents).toEqual(["custom-1"]);
+    });
+
+    it("should discover custom agents from agents definition directories (.pi/agents and ~/.pi/agent/agents)", () => {
+      const projectAgentsDir = path.join(path.dirname(projectSubagentsPath), "agents");
+      const globalAgentsDir = path.join(path.dirname(globalSubagentsPath), "agents");
+
+      fs.mkdirSync(projectAgentsDir, { recursive: true });
+      fs.mkdirSync(globalAgentsDir, { recursive: true });
+
+      // Add valid agent definition files
+      fs.writeFileSync(path.join(projectAgentsDir, "my-custom-doc.md"), "# Custom Agent");
+      fs.writeFileSync(path.join(projectAgentsDir, "reviewer-agent.yaml"), "name: reviewer");
+      fs.writeFileSync(path.join(projectAgentsDir, "formatter-agent.yml"), "name: formatter");
+      fs.writeFileSync(path.join(globalAgentsDir, "global-coder.json"), '{"name": "coder"}');
+
+      // Add files that should be ignored / filtered
+      fs.writeFileSync(path.join(projectAgentsDir, ".hidden-agent.md"), "hidden");
+      fs.writeFileSync(path.join(projectAgentsDir, "ignore-me.txt"), "not matching ext");
+      fs.writeFileSync(path.join(globalAgentsDir, "sdd-explore.md"), "known SDD agent");
+      fs.writeFileSync(path.join(globalAgentsDir, "invalid agent key.yaml"), "synthetic key with spaces");
+
+      const discovered = manager.discoverCustomAgents();
+      expect(discovered).toContain("my-custom-doc");
+      expect(discovered).toContain("reviewer-agent");
+      expect(discovered).toContain("formatter-agent");
+      expect(discovered).toContain("global-coder");
+
+      expect(discovered).not.toContain(".hidden-agent");
+      expect(discovered).not.toContain("ignore-me");
+      expect(discovered).not.toContain("sdd-explore");
+      expect(discovered).not.toContain("invalid agent key");
+    });
+
+    it("should discover custom agents from project and global subagents.json", () => {
+
+      // Configure project subagents.json with custom agents in model_profiles and agents object
+      const projectConfig = {
+        model_profiles: {
+          "sdd-explore": { model: "base-model" }, // Known SDD agent -> should be filtered
+          "custom-proj-model": { model: "custom-model" },
+          "⚡ [Asignar un mismo modelo...]": { model: "ignore-me" }, // Synthetic -> should be filtered
+        },
+        agents: {
+          "custom-proj-agent-key": { model: "m1" },
+          "alias-key": "custom-proj-agent-val",
+        },
+      };
+      fs.writeFileSync(projectSubagentsPath, JSON.stringify(projectConfig, null, 2), "utf-8");
+
+      // Configure global subagents.json with custom agents in agents array
+      const globalConfig = {
+        agents: [
+          "custom-global-agent",
+          { name: "custom-global-obj-agent" },
+          "sdd-apply", // Known SDD agent -> should be filtered
+          "agent with space", // Synthetic -> should be filtered
+        ],
+      };
+      fs.writeFileSync(globalSubagentsPath, JSON.stringify(globalConfig, null, 2), "utf-8");
+
+      const discovered = manager.discoverCustomAgents();
+      expect(discovered).toEqual([
+        "alias-key",
+        "custom-global-agent",
+        "custom-global-obj-agent",
+        "custom-proj-agent-key",
+        "custom-proj-agent-val",
+        "custom-proj-model",
+      ]);
+    });
+
+    it("should discover custom agents from stored profiles and currentProfile", () => {
+      // Create a profile in storage with a custom agent
+      manager.createProfile({
+        name: "profile-with-custom",
+        model_profiles: {
+          "sdd-explore": { model: "m1" },
+          "custom-stored-agent": { model: "m2" },
+          "📦 Category Assignment": { model: "m3" }, // Synthetic
+        },
+      });
+
+      // Pass an active/current profile with another custom agent
+      const currentProfile: Profile = {
+        name: "transient-profile",
+        model_profiles: {
+          "sdd-tasks": { model: "m4" },
+          "custom-current-agent": { model: "m5" },
+        },
+      };
+
+      const discovered = manager.discoverCustomAgents(currentProfile);
+      expect(discovered).toContain("custom-stored-agent");
+      expect(discovered).toContain("custom-current-agent");
+      expect(discovered).not.toContain("sdd-explore");
+      expect(discovered).not.toContain("sdd-tasks");
+      expect(discovered).not.toContain("📦 Category Assignment");
+    });
+
+    it("should return Custom Agents category in getCategories and include them in getAllAgents", () => {
+      // When no custom agents exist
+      const initialCategories = manager.getCategories();
+      expect(initialCategories.length).toBe(SDD_AGENT_CATEGORIES.length);
+      expect(manager.getAllAgents()).toEqual(ALL_KNOWN_AGENTS);
+
+      // Now introduce a custom agent via currentProfile
+      const profileWithCustom: Profile = {
+        name: "custom-holder",
+        model_profiles: {
+          "my-special-agent": { model: "vendor/fast" },
+        },
+      };
+
+      const categories = manager.getCategories(profileWithCustom);
+      expect(categories.length).toBe(SDD_AGENT_CATEGORIES.length + 1);
+
+      const customCat = categories[categories.length - 1];
+      expect(customCat.id).toBe("custom");
+      expect(customCat.name).toBe("Custom Agents");
+      expect(customCat.agents).toEqual(["my-special-agent"]);
+
+      const allAgents = manager.getAllAgents(profileWithCustom);
+      expect(allAgents).toEqual([...ALL_KNOWN_AGENTS, "my-special-agent"]);
+    });
   });
 });
