@@ -9,7 +9,7 @@ import {
   type UiContext,
 } from "./src/ui.js";
 import { createSddProfilesModal } from "./src/modal.js";
-import { resolveAvailableModels } from "./src/models-resolver.js";
+import { resolveAvailableModels, resolveModelsMetadata } from "./src/models-resolver.js";
 import { parseReasoningEffort, type ReasoningEffort } from "./src/types.js";
 import {
   resolveShortcutsConfig,
@@ -84,6 +84,33 @@ export default function sddProfilesExtension(pi: any): void {
   };
 
   let activeWatcher: SubagentsConfigWatcher | null = null;
+  let lastSessionCtx: any = null;
+
+  const sddProfilesApi = {
+    listProfiles: () => {
+      const manager = getManager(lastSessionCtx);
+      const active = manager.getActiveProfileName();
+      return manager.listProfiles().map((p: any) => ({
+        ...p,
+        active: active ? p.name.toLowerCase() === active.toLowerCase() : false,
+      }));
+    },
+    getActiveProfile: () => {
+      const manager = getManager(lastSessionCtx);
+      return manager.getActiveProfileName();
+    },
+    activateProfile: async (name: string, scope?: "global" | "project") => {
+      const manager = getManager(lastSessionCtx);
+      const targetScope = scope ?? manager.getActiveScope() ?? "global";
+      const res = manager.activateProfile(name, targetScope);
+      if (res.success && res.profile) {
+        await syncActiveProfileToRuntime(res.profile, lastSessionCtx);
+      }
+      return res;
+    },
+  };
+
+  (globalThis as any)[Symbol.for("cinlodev.sdd-profiles.api")] = sddProfilesApi;
 
   const stopWatcher = () => {
     if (activeWatcher) {
@@ -96,6 +123,7 @@ export default function sddProfilesExtension(pi: any): void {
 
   // Ensure footer status, session model and subagents.json match active profile on start
   pi.on?.("session_start", async (_event: any, ctx: any) => {
+    lastSessionCtx = ctx;
     if (process.env.GENTLE_PI_AGENTS_CHILD === "1") return;
 
     const manager = getManager(ctx);
@@ -148,11 +176,13 @@ export default function sddProfilesExtension(pi: any): void {
   const openProfilesModalOrFallback = async (manager: SddProfileManager, boundCtx: UiContext) => {
     if (typeof (boundCtx.ui as any)?.custom === "function") {
       const availableModels = await resolveAvailableModels(boundCtx);
+      const modelsMetadata = await resolveModelsMetadata(boundCtx);
       return (boundCtx.ui as any).custom(
         (tui: any, theme: any, _keybindings: any, done: (result?: any) => void) =>
           createSddProfilesModal({
             manager,
             availableModels,
+            modelsMetadata,
             theme,
             tui,
             onProfileActivated: async (p) => {
