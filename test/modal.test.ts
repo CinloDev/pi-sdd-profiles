@@ -257,8 +257,11 @@ describe("modal overlay component", () => {
 
     // Now back in editor. Move down to sdd-explore to customize individually
     modal.handleInput("\u001b[B"); // down to index 2 (All effort)
-    modal.handleInput("\u001b[B"); // down to index 3 (Category)
-    modal.handleInput("\u001b[B"); // down to index 4 (sdd-explore)
+    modal.handleInput("\u001b[B"); // down to index 3 (ODD Core)
+    modal.handleInput("\u001b[B"); // down to index 4 (Judgment Day)
+    modal.handleInput("\u001b[B"); // down to index 5 (Reviewers)
+    modal.handleInput("\u001b[B"); // down to index 6 (SDD On-Demand)
+    modal.handleInput("\u001b[B"); // down to index 7 (sdd-explore)
     modal.handleInput("\r"); // enter
     lines = modal.render(80);
     content = lines.join("\n");
@@ -999,18 +1002,21 @@ describe("modal overlay component", () => {
         done,
       });
 
-      // Press 'c' to jump to category in the tree
+      // Press 'c' 4 times to jump to SDD On-Demand category in the tree
+      modal.handleInput("c");
+      modal.handleInput("c");
+      modal.handleInput("c");
       modal.handleInput("c");
       let lines = modal.render(80);
-      expect(lines.join("\n")).toContain("SDD Core");
+      expect(lines.join("\n")).toContain("SDD On-Demand");
 
-      // Press Enter directly on SDD Core to open model picker
+      // Press Enter directly on SDD On-Demand to open model picker
       modal.handleInput("\r");
       lines = modal.render(80);
-      expect(lines.join("\n")).toContain("Categoría: SDD Core");
+      expect(lines.join("\n")).toContain("Categoría: SDD On-Demand");
 
       lines = modal.render(80);
-      expect(lines.join("\n")).toContain("Categoría: SDD Core");
+      expect(lines.join("\n")).toContain("Categoría: SDD On-Demand");
 
       // Select first model (anthropic/claude-sonnet-4-5)
       modal.handleInput("\r"); // Enter -> saves model in-place
@@ -1037,22 +1043,25 @@ describe("modal overlay component", () => {
         done,
       });
 
-      // Jump to category
+      // Jump to SDD On-Demand category (4th category)
+      modal.handleInput("c");
+      modal.handleInput("c");
+      modal.handleInput("c");
       modal.handleInput("c");
       let lines = modal.render(100);
-      expect(lines.join("\n")).toContain("▼ 📦 SDD Core");
+      expect(lines.join("\n")).toContain("▼ 📦 SDD On-Demand");
       expect(lines.join("\n")).toContain("sdd-explore");
 
-      // Press Space to collapse SDD Core
+      // Press Space to collapse SDD On-Demand
       modal.handleInput(" ");
       lines = modal.render(100);
-      expect(lines.join("\n")).toContain("► 📦 SDD Core");
+      expect(lines.join("\n")).toContain("► 📦 SDD On-Demand");
       expect(lines.join("\n")).not.toContain("sdd-explore");
 
       // Press Space again to re-expand
       modal.handleInput(" ");
       lines = modal.render(100);
-      expect(lines.join("\n")).toContain("▼ 📦 SDD Core");
+      expect(lines.join("\n")).toContain("▼ 📦 SDD On-Demand");
       expect(lines.join("\n")).toContain("sdd-explore");
     });
   });
@@ -1555,7 +1564,7 @@ describe("modal overlay component", () => {
         default_model: "google/gemini-orchestrator",
         model_profiles: {
           "sdd-explore": { model: "anthropic/claude-3-7-sonnet" },
-          "sdd-propose": { model: "anthropic/claude-3-7-sonnet" },
+          "sdd-proposal": { model: "anthropic/claude-3-7-sonnet" },
           "sdd-spec": { model: "anthropic/claude-3-7-sonnet" },
           "sdd-design": { model: "anthropic/claude-3-7-sonnet" },
           "sdd-tasks": { model: "anthropic/claude-3-7-sonnet" },
@@ -1585,7 +1594,10 @@ describe("modal overlay component", () => {
         done,
       });
 
-      // Navigate to SDD Core category
+      // Navigate to SDD On-Demand category
+      modal.handleInput("c");
+      modal.handleInput("c");
+      modal.handleInput("c");
       modal.handleInput("c");
       // Open model picker on category
       modal.handleInput("\r");
@@ -1594,7 +1606,7 @@ describe("modal overlay component", () => {
       let content = lines.join("\n");
 
       // Verify category target is displayed
-      expect(content).toContain("Categoría: SDD Core");
+      expect(content).toContain("Categoría: SDD On-Demand");
       // Verify currently assigned model for this category is displayed!
       expect(content).toContain("Actual:");
       expect(content).toContain("claude-3-7-sonnet");
@@ -1654,15 +1666,14 @@ describe("modal overlay component", () => {
       // Switch to agents pane
       modal.handleInput("tab");
 
-      // Jump to SDD Core and collapse it so all categories and items fit in the viewport
-      modal.handleInput("c");
-      modal.handleInput(" ");
-
-      // Jump through remaining categories with 'c' until reaching Custom Agents
-      // Judgment Day -> Reviewers -> General -> Custom Agents
+      // Jump to SDD On-Demand and collapse it so all categories and items fit in the viewport
+      modal.handleInput("c"); // ODD Core
       modal.handleInput("c"); // Judgment Day
       modal.handleInput("c"); // Reviewers
-      modal.handleInput("c"); // General
+      modal.handleInput("c"); // SDD On-Demand
+      modal.handleInput(" "); // Collapse SDD On-Demand
+
+      // Jump to Custom Agents
       modal.handleInput("c"); // Custom Agents
 
       let lines = modal.render(100);
