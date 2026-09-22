@@ -108,7 +108,7 @@ pi remove https://github.com/CinloDev/pi-sdd-profiles
   - Exportá cualquier perfil a `.json` con `x` (con resolución inteligente de rutas `~/` y limpieza de claves sintéticas).
   - Importá perfiles con `i` mediante un **mini-explorador de archivos interactivo** en la TUI (carpetas `📁`, archivos `.json` `📄`, subida de nivel `..`, soporte para selección de scope `[1] Proyecto` vs `[2] Global`, y diálogo inteligente de resolución de conflictos con sugerencia de renombrado o sobreescritura).
 - 🖱️ **Soporte Completo de Mouse (Ruedita y Clics)**: Hacé scroll con la rueda del mouse por listas largas, seleccioná filas con un clic, activá perfiles o abrí selectores con doble clic, y clickeá directamente los botones de acción (`[Activar]`, `[Edit]`, `[Nuevo]`, `[Export]`, `[Import]`, `[Borrar]`, `[Salir]`) o el botón `[ x ]` superior.
-- 📐 **Vista Adaptativa de hasta 15 Filas**: Mayor altura visual para visualizar de un tirón categorías completas como `SDD Core` sin necesidad de scroll excesivo, adaptándose a pantallas más reducidas.
+- 📐 **Vista Adaptativa de hasta 15 Filas**: Mayor altura visual para visualizar de un tirón categorías completas como `ODD Core` o `SDD On-Demand` sin necesidad de scroll excesivo, adaptándose a pantallas más reducidas.
 - ⚡ **Cambio en caliente**: Alterná perfiles y sincronizá el modelo de sesión y los subagentes al instante.
 - 📦 **Perfiles Estándar Incluidos**:
   - `balanced-default`: Equilibrio entre calidad y costo con Claude Sonnet 4.5 y Claude Haiku 4.5.
@@ -136,7 +136,7 @@ Si utilizás Pi en modo fullscreen (`--tui-mode fullscreen` o en `/settings` con
 - `↑` / `↓` o `j` / `k`: Moverse entre los ítems de la columna activa.
 - `Tab` / `Shift + Tab` o `←` / `→`: Alternar foco entre **Perfiles**, **Agentes** y **Effort**.
 - `Enter`: En Perfiles activa el perfil en caliente; en Agentes abre el selector de modelos; en Effort aplica el nivel de razonamiento.
-- `Espacio`: En Agentes pliega o despliega categorías del acordeón (`▼ SDD Core`, `► Judgment Day`, etc.).
+- `Espacio`: En Agentes pliega o despliega categorías del acordeón (`▼ ODD Core`, `► Judgment Day`, `► SDD On-Demand`, etc.).
 - `e`: Modo edición de agentes.
 - `r`: Renombrar el perfil seleccionado.
 - `n`: Crear un nuevo perfil personalizado.
