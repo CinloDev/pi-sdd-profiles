@@ -4,16 +4,25 @@
   "default_model": "openai/o3-mini",
   "default_effort": "high",
   "model_profiles": {
+    "gentle-ai-explore": { "model": "anthropic/claude-sonnet-4-5", "effort": "medium" },
+    "gentle-ai-worker": { "model": "openai/o3-mini", "effort": "high" },
+    "gentle-ai-verify": { "model": "anthropic/claude-sonnet-4-5", "effort": "medium" },
+    "jd-judge-a": { "model": "openai/o3-mini", "effort": "max" },
+    "jd-judge-b": { "model": "anthropic/claude-sonnet-4-5", "effort": "high" },
+    "jd-fix-agent": { "model": "openai/o3-mini", "effort": "max" },
+    "review-risk": { "model": "openai/o3-mini", "effort": "max" },
+    "review-readability": { "model": "anthropic/claude-sonnet-4-5", "effort": "high" },
+    "review-reliability": { "model": "openai/o3-mini", "effort": "max" },
+    "review-resilience": { "model": "openai/o3-mini", "effort": "max" },
     "sdd-explore": { "model": "anthropic/claude-sonnet-4-5", "effort": "medium" },
-    "sdd-verify": { "model": "anthropic/claude-sonnet-4-5", "effort": "medium" },
-    "sdd-propose": { "model": "openai/o3-mini", "effort": "max" },
+    "sdd-proposal": { "model": "openai/o3-mini", "effort": "max" },
     "sdd-spec": { "model": "openai/o3-mini", "effort": "max" },
     "sdd-design": { "model": "openai/o3-mini", "effort": "max" },
     "sdd-tasks": { "model": "openai/o3-mini", "effort": "high" },
     "sdd-apply": { "model": "anthropic/claude-sonnet-4-5", "effort": "high" },
-    "sdd-archive": { "model": "anthropic/claude-haiku-4-5", "effort": "low" },
-    "jd-judge-a": { "model": "openai/o3-mini", "effort": "max" },
-    "jd-judge-b": { "model": "anthropic/claude-sonnet-4-5", "effort": "high" },
-    "jd-fix-agent": { "model": "openai/o3-mini", "effort": "max" }
+    "sdd-verify": { "model": "anthropic/claude-sonnet-4-5", "effort": "medium" },
+    "sdd-archive": { "model": "anthropic/claude-haiku-4-5", "effort": "medium" },
+    "sdd-research": { "model": "openai/o3-mini", "effort": "high" },
+    "sdd-remediate": { "model": "openai/o3-mini", "effort": "max" }
   }
 }

@@ -4,19 +4,25 @@
   "default_model": "anthropic/claude-sonnet-4-5",
   "default_effort": "medium",
   "model_profiles": {
+    "gentle-ai-explore": { "model": "anthropic/claude-haiku-4-5", "effort": "low" },
+    "gentle-ai-worker": { "model": "anthropic/claude-sonnet-4-5", "effort": "medium" },
+    "gentle-ai-verify": { "model": "anthropic/claude-haiku-4-5", "effort": "low" },
+    "jd-judge-a": { "model": "anthropic/claude-sonnet-4-5", "effort": "high" },
+    "jd-judge-b": { "model": "openai/o3-mini", "effort": "high" },
+    "jd-fix-agent": { "model": "anthropic/claude-sonnet-4-5", "effort": "high" },
+    "review-risk": { "model": "anthropic/claude-sonnet-4-5", "effort": "high" },
+    "review-readability": { "model": "anthropic/claude-sonnet-4-5", "effort": "medium" },
+    "review-reliability": { "model": "anthropic/claude-sonnet-4-5", "effort": "high" },
+    "review-resilience": { "model": "anthropic/claude-sonnet-4-5", "effort": "high" },
     "sdd-explore": { "model": "anthropic/claude-haiku-4-5", "effort": "low" },
-    "sdd-verify": { "model": "anthropic/claude-haiku-4-5", "effort": "low" },
-    "sdd-propose": { "model": "anthropic/claude-sonnet-4-5", "effort": "high" },
+    "sdd-proposal": { "model": "anthropic/claude-sonnet-4-5", "effort": "high" },
     "sdd-spec": { "model": "anthropic/claude-sonnet-4-5", "effort": "high" },
     "sdd-design": { "model": "anthropic/claude-sonnet-4-5", "effort": "high" },
     "sdd-tasks": { "model": "anthropic/claude-sonnet-4-5", "effort": "high" },
     "sdd-apply": { "model": "anthropic/claude-sonnet-4-5", "effort": "medium" },
+    "sdd-verify": { "model": "anthropic/claude-haiku-4-5", "effort": "low" },
     "sdd-archive": { "model": "anthropic/claude-haiku-4-5", "effort": "low" },
-    "jd-judge-a": { "model": "anthropic/claude-sonnet-4-5", "effort": "high" },
-    "jd-judge-b": { "model": "openai/o3-mini", "effort": "high" },
-    "jd-fix-agent": { "model": "anthropic/claude-sonnet-4-5", "effort": "high" },
-    "gentle-ai-explore": { "model": "anthropic/claude-haiku-4-5", "effort": "low" },
-    "gentle-ai-verify": { "model": "anthropic/claude-haiku-4-5", "effort": "low" },
-    "gentle-ai-worker": { "model": "anthropic/claude-sonnet-4-5", "effort": "medium" }
+    "sdd-research": { "model": "anthropic/claude-haiku-4-5", "effort": "medium" },
+    "sdd-remediate": { "model": "anthropic/claude-sonnet-4-5", "effort": "high" }
   }
 }
