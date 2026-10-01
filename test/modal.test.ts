@@ -33,7 +33,7 @@ describe("modal overlay component", () => {
     default_model: "cpamc/cin82/gemini-3.8-flash-high",
     default_effort: "high" as const,
     model_profiles: {
-      "sdd-explore": { model: "cpamc/cin82/gemini-3.8-flash-high", effort: "high" as const },
+      "gentle-ai-explore": { model: "cpamc/cin82/gemini-3.8-flash-high", effort: "high" as const },
     },
   };
 
@@ -225,7 +225,7 @@ describe("modal overlay component", () => {
     let lines = modal.render(80);
     let content = lines.join("\n");
     expect(content).toContain("Editar Perfil: cin");
-    expect(content).toContain("sdd-explore");
+    expect(content).toContain("gentle-ai-explore");
 
     // Press 'm' to open model picker (for orchestrator)
     modal.handleInput("m");
@@ -255,19 +255,17 @@ describe("modal overlay component", () => {
     content = lines.join("\n");
     expect(content).toContain("guardado");
 
-    // Now back in editor. Move down to sdd-explore to customize individually
+    // Now back in editor. Move down to gentle-ai-explore to customize individually
+    // Tree: 0=Orchestrator, 1=Assign to ALL, 2=Effort to all, 3=ODD Core (expanded), 4=gentle-ai-explore
     modal.handleInput("\u001b[B"); // down to index 2 (All effort)
     modal.handleInput("\u001b[B"); // down to index 3 (ODD Core)
-    modal.handleInput("\u001b[B"); // down to index 4 (Judgment Day)
-    modal.handleInput("\u001b[B"); // down to index 5 (Reviewers)
-    modal.handleInput("\u001b[B"); // down to index 6 (SDD On-Demand)
-    modal.handleInput("\u001b[B"); // down to index 7 (sdd-explore)
+    modal.handleInput("\u001b[B"); // down to index 4 (gentle-ai-explore)
     modal.handleInput("\r"); // enter
     lines = modal.render(80);
     content = lines.join("\n");
-    expect(content).toContain("Agente: sdd-explore");
+    expect(content).toContain("Agente: gentle-ai-explore");
 
-    // Select third model (openai/o3-mini) for sdd-explore individually
+    // Select third model (openai/o3-mini) for gentle-ai-explore individually
     modal.handleInput("\u001b[B");
     modal.handleInput("\u001b[B");
     modal.handleInput("\r"); // enter -> sets model in-place!
@@ -1002,34 +1000,28 @@ describe("modal overlay component", () => {
         done,
       });
 
-      // Press 'c' 4 times to jump to SDD On-Demand category in the tree
-      modal.handleInput("c");
-      modal.handleInput("c");
-      modal.handleInput("c");
+      // Press 'c' to jump to ODD Core category in the tree
       modal.handleInput("c");
       let lines = modal.render(80);
-      expect(lines.join("\n")).toContain("SDD On-Demand");
+      expect(lines.join("\n")).toContain("ODD Core");
 
-      // Press Enter directly on SDD On-Demand to open model picker
+      // Press Enter directly on ODD Core to open model picker
       modal.handleInput("\r");
       lines = modal.render(80);
-      expect(lines.join("\n")).toContain("Categoría: SDD On-Demand");
-
-      lines = modal.render(80);
-      expect(lines.join("\n")).toContain("Categoría: SDD On-Demand");
+      expect(lines.join("\n")).toContain("Categoría: ODD Core");
 
       // Select first model (anthropic/claude-sonnet-4-5)
       modal.handleInput("\r"); // Enter -> saves model in-place
       lines = modal.render(100);
       expect(lines.join("\n")).toContain("guardado");
 
-      // Verify createProfile was called with updated agents in SDD Core
+      // Verify createProfile was called with updated agents in ODD Core
       expect(customManager.createProfile).toHaveBeenCalledWith(
         expect.objectContaining({
           model_profiles: expect.objectContaining({
-            "sdd-explore": expect.objectContaining({ model: "anthropic/claude-sonnet-4-5" }),
-            "sdd-apply": expect.objectContaining({ model: "anthropic/claude-sonnet-4-5" }),
-            "sdd-verify": expect.objectContaining({ model: "anthropic/claude-sonnet-4-5" }),
+            "gentle-ai-explore": expect.objectContaining({ model: "anthropic/claude-sonnet-4-5" }),
+            "gentle-ai-worker": expect.objectContaining({ model: "anthropic/claude-sonnet-4-5" }),
+            "gentle-ai-verify": expect.objectContaining({ model: "anthropic/claude-sonnet-4-5" }),
           }),
         })
       );
@@ -1043,26 +1035,23 @@ describe("modal overlay component", () => {
         done,
       });
 
-      // Jump to SDD On-Demand category (4th category)
-      modal.handleInput("c");
-      modal.handleInput("c");
-      modal.handleInput("c");
+      // Jump to ODD Core category (first category)
       modal.handleInput("c");
       let lines = modal.render(100);
-      expect(lines.join("\n")).toContain("▼ 📦 SDD On-Demand");
-      expect(lines.join("\n")).toContain("sdd-explore");
+      expect(lines.join("\n")).toContain("▼ 📦 ODD Core");
+      expect(lines.join("\n")).toContain("gentle-ai-explore");
 
-      // Press Space to collapse SDD On-Demand
+      // Press Space to collapse ODD Core
       modal.handleInput(" ");
       lines = modal.render(100);
-      expect(lines.join("\n")).toContain("► 📦 SDD On-Demand");
-      expect(lines.join("\n")).not.toContain("sdd-explore");
+      expect(lines.join("\n")).toContain("► 📦 ODD Core");
+      expect(lines.join("\n")).not.toContain("gentle-ai-explore");
 
       // Press Space again to re-expand
       modal.handleInput(" ");
       lines = modal.render(100);
-      expect(lines.join("\n")).toContain("▼ 📦 SDD On-Demand");
-      expect(lines.join("\n")).toContain("sdd-explore");
+      expect(lines.join("\n")).toContain("▼ 📦 ODD Core");
+      expect(lines.join("\n")).toContain("gentle-ai-explore");
     });
   });
 
@@ -1563,14 +1552,9 @@ describe("modal overlay component", () => {
         name: "test-category-isolation",
         default_model: "google/gemini-orchestrator",
         model_profiles: {
-          "sdd-explore": { model: "anthropic/claude-3-7-sonnet" },
-          "sdd-proposal": { model: "anthropic/claude-3-7-sonnet" },
-          "sdd-spec": { model: "anthropic/claude-3-7-sonnet" },
-          "sdd-design": { model: "anthropic/claude-3-7-sonnet" },
-          "sdd-tasks": { model: "anthropic/claude-3-7-sonnet" },
-          "sdd-apply": { model: "anthropic/claude-3-7-sonnet" },
-          "sdd-verify": { model: "anthropic/claude-3-7-sonnet" },
-          "sdd-archive": { model: "anthropic/claude-3-7-sonnet" },
+          "gentle-ai-explore": { model: "anthropic/claude-3-7-sonnet" },
+          "gentle-ai-worker": { model: "anthropic/claude-3-7-sonnet" },
+          "gentle-ai-verify": { model: "anthropic/claude-3-7-sonnet" },
         },
       };
 
@@ -1594,10 +1578,7 @@ describe("modal overlay component", () => {
         done,
       });
 
-      // Navigate to SDD On-Demand category
-      modal.handleInput("c");
-      modal.handleInput("c");
-      modal.handleInput("c");
+      // Navigate to ODD Core category
       modal.handleInput("c");
       // Open model picker on category
       modal.handleInput("\r");
@@ -1606,7 +1587,7 @@ describe("modal overlay component", () => {
       let content = lines.join("\n");
 
       // Verify category target is displayed
-      expect(content).toContain("Categoría: SDD On-Demand");
+      expect(content).toContain("Categoría: ODD Core");
       // Verify currently assigned model for this category is displayed!
       expect(content).toContain("Actual:");
       expect(content).toContain("claude-3-7-sonnet");
@@ -1620,9 +1601,10 @@ describe("modal overlay component", () => {
       expect(customManager.createProfile).toHaveBeenCalled();
       // Crucial assertion: Orchestrator's default_model must remain untouched!
       expect(profileData.default_model).toBe("google/gemini-orchestrator");
-      // All SDD Core agents must be updated to openai/o3-mini
-      expect(profileData.model_profiles["sdd-explore"].model).toBe("openai/o3-mini");
-      expect(profileData.model_profiles["sdd-archive"].model).toBe("openai/o3-mini");
+      // All ODD Core agents must be updated to openai/o3-mini
+      expect(profileData.model_profiles["gentle-ai-explore"].model).toBe("openai/o3-mini");
+      expect(profileData.model_profiles["gentle-ai-worker"].model).toBe("openai/o3-mini");
+      expect(profileData.model_profiles["gentle-ai-verify"].model).toBe("openai/o3-mini");
     });
   });
 
@@ -1666,14 +1648,13 @@ describe("modal overlay component", () => {
       // Switch to agents pane
       modal.handleInput("tab");
 
-      // Jump to SDD On-Demand and collapse it so all categories and items fit in the viewport
+      // Collapse ODD Core so tree fits
       modal.handleInput("c"); // ODD Core
+      modal.handleInput(" "); // Collapse ODD Core
+
+      // Jump through categories to Custom Agents
       modal.handleInput("c"); // Judgment Day
       modal.handleInput("c"); // Reviewers
-      modal.handleInput("c"); // SDD On-Demand
-      modal.handleInput(" "); // Collapse SDD On-Demand
-
-      // Jump to Custom Agents
       modal.handleInput("c"); // Custom Agents
 
       let lines = modal.render(100);
@@ -1728,11 +1709,10 @@ describe("modal overlay component", () => {
       });
 
       // Jump to Custom Agents category and expand it
-      modal.handleInput("c");
-      modal.handleInput("c");
-      modal.handleInput("c");
-      modal.handleInput("c");
-      modal.handleInput("c");
+      modal.handleInput("c"); // ODD Core
+      modal.handleInput("c"); // Judgment Day
+      modal.handleInput("c"); // Reviewers
+      modal.handleInput("c"); // Custom Agents
       modal.handleInput(" "); // Expand Custom Agents
 
       // Move down into coder-bot
@@ -1798,11 +1778,10 @@ describe("modal overlay component", () => {
       modal.handleInput("tab");
 
       // Jump to Custom Agents category with 'c'
-      modal.handleInput("c");
-      modal.handleInput("c");
-      modal.handleInput("c");
-      modal.handleInput("c");
-      modal.handleInput("c"); // On Custom Agents category
+      modal.handleInput("c"); // ODD Core
+      modal.handleInput("c"); // Judgment Day
+      modal.handleInput("c"); // Reviewers
+      modal.handleInput("c"); // Custom Agents
 
       // Press 'm' to open model picker for the category
       modal.handleInput("m");
@@ -1827,7 +1806,7 @@ describe("modal overlay component", () => {
         name: "test-custom-all",
         default_model: "google/gemini-orchestrator",
         model_profiles: {
-          "sdd-explore": { model: "some-old-model" },
+          "gentle-ai-explore": { model: "some-old-model" },
           "coder-bot": { model: "old-custom-model" },
           "tester-ai": { model: "another-old-model" },
         },
@@ -1877,8 +1856,7 @@ describe("modal overlay component", () => {
 
       // Verify createProfile was called and both standard and custom agents received the model
       expect(customManager.createProfile).toHaveBeenCalled();
-      expect(profileData.model_profiles["sdd-explore"].model).toBe("anthropic/claude-sonnet-4-5");
-      expect(profileData.model_profiles["sdd-archive"].model).toBe("anthropic/claude-sonnet-4-5");
+      expect(profileData.model_profiles["gentle-ai-explore"].model).toBe("anthropic/claude-sonnet-4-5");
       expect(profileData.model_profiles["coder-bot"].model).toBe("anthropic/claude-sonnet-4-5");
       expect(profileData.model_profiles["tester-ai"].model).toBe("anthropic/claude-sonnet-4-5");
     });

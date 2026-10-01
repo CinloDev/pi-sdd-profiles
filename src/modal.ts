@@ -3,7 +3,7 @@ import * as path from "node:path";
 import * as os from "node:os";
 import type { ModelProfileEntry, Profile, ProfileSummary, ReasoningEffort } from "./types.js";
 import type { TuiMouseEvent, TuiMouseEventResult } from "@earendil-works/pi-tui";
-import { ALL_KNOWN_AGENTS, SDD_AGENT_CATEGORIES, type AgentCategory } from "./catalog.js";
+import { ALL_KNOWN_AGENTS, SDD_AGENT_CATEGORIES, ODD_CORE_CATEGORY_ID, type AgentCategory } from "./catalog.js";
 import type { SddProfileManager } from "./manager.js";
 import {
   type ModelMetadata,
@@ -163,7 +163,7 @@ export function createSddProfilesModal(input: ModalInput) {
 
   // Editing state for agents (Col 2)
   let editingProfile: Profile | null = null;
-  let expandedCategories = new Set<string>(["sdd-core"]);
+  let expandedCategories = new Set<string>([ODD_CORE_CATEGORY_ID]);
   let selectedAgentIndex = 0;
   let agentScrollOffset = 0;
   let isDirty = false;

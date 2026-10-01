@@ -13,16 +13,6 @@
     "review-risk": { "model": "openai/o3-mini", "effort": "max" },
     "review-readability": { "model": "anthropic/claude-sonnet-4-5", "effort": "high" },
     "review-reliability": { "model": "openai/o3-mini", "effort": "max" },
-    "review-resilience": { "model": "openai/o3-mini", "effort": "max" },
-    "sdd-explore": { "model": "anthropic/claude-sonnet-4-5", "effort": "medium" },
-    "sdd-proposal": { "model": "openai/o3-mini", "effort": "max" },
-    "sdd-spec": { "model": "openai/o3-mini", "effort": "max" },
-    "sdd-design": { "model": "openai/o3-mini", "effort": "max" },
-    "sdd-tasks": { "model": "openai/o3-mini", "effort": "high" },
-    "sdd-apply": { "model": "anthropic/claude-sonnet-4-5", "effort": "high" },
-    "sdd-verify": { "model": "anthropic/claude-sonnet-4-5", "effort": "medium" },
-    "sdd-archive": { "model": "anthropic/claude-haiku-4-5", "effort": "medium" },
-    "sdd-research": { "model": "openai/o3-mini", "effort": "high" },
-    "sdd-remediate": { "model": "openai/o3-mini", "effort": "max" }
+    "review-resilience": { "model": "openai/o3-mini", "effort": "max" }
   }
 }

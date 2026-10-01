@@ -301,11 +301,14 @@ describe("manager module", () => {
       expect(customCat?.agents).toEqual(["alpha-agent", "beta-agent"]);
 
       const defaultResolved = resolveCategories([]);
+      expect(SDD_AGENT_CATEGORIES.length).toBe(3);
+      expect(defaultResolved.length).toBe(3);
       expect(defaultResolved.length).toBe(SDD_AGENT_CATEGORIES.length);
       expect(defaultResolved.map((c) => c.id)).not.toContain("custom");
 
       const withCustom = resolveCategories(["custom-1"]);
       expect(withCustom.length).toBe(SDD_AGENT_CATEGORIES.length + 1);
+      expect(withCustom.length).toBe(4);
       expect(withCustom[withCustom.length - 1].id).toBe("custom");
       expect(withCustom[withCustom.length - 1].agents).toEqual(["custom-1"]);
     });
@@ -410,8 +413,12 @@ describe("manager module", () => {
     it("should return Custom Agents category in getCategories and include them in getAllAgents", () => {
       // When no custom agents exist
       const initialCategories = manager.getCategories();
+      expect(SDD_AGENT_CATEGORIES.length).toBe(3);
+      expect(initialCategories.length).toBe(3);
       expect(initialCategories.length).toBe(SDD_AGENT_CATEGORIES.length);
+      expect(ALL_KNOWN_AGENTS.length).toBe(10);
       expect(manager.getAllAgents()).toEqual(ALL_KNOWN_AGENTS);
+      expect(manager.getAllAgents().length).toBe(10);
 
       // Now introduce a custom agent via currentProfile
       const profileWithCustom: Profile = {
