@@ -18,6 +18,24 @@ import type {
   SubagentsConfigFile,
 } from "./types.js";
 
+/**
+ * Legacy SDD phase agents from the previous static catalog.
+ * These are filtered from custom agent discovery and should never be resurrected
+ * as custom agents by legacy or stored profiles.
+ */
+export const LEGACY_SDD_AGENTS = new Set([
+  "sdd-explore",
+  "sdd-proposal",
+  "sdd-spec",
+  "sdd-design",
+  "sdd-tasks",
+  "sdd-apply",
+  "sdd-verify",
+  "sdd-archive",
+  "sdd-research",
+  "sdd-remediate",
+]);
+
 export interface ManagerOptions extends StorageOptions {
   globalSubagentsPath?: string;
   projectSubagentsPath?: string;
@@ -330,62 +348,25 @@ export class SddProfileManager {
   }
 
   /**
-   * Discovers custom agents dynamically from project/global subagents.json,
-   * saved profiles in storage, and the currently active/specified profile.
+   * Discovers custom agents dynamically from filesystem (.pi/agents/ and ~/.pi/agent/agents/)
+   * and runtime configuration (project/global subagents.json and settings.json).
+   *
+   * Real custom agents come from actual definition files on disk or declared active
+   * subagents in configuration. Legacy orphaned keys from stored profiles or currentProfile
+   * are validated and never resurrected.
    */
   discoverCustomAgents(currentProfile?: Profile): string[] {
+    const filesystemAgents = new Set<string>();
+    const configAgents = new Set<string>();
     const candidateSet = new Set<string>();
 
-    const collectFromConfig = (filePath: string) => {
-      if (!fs.existsSync(filePath)) return;
-      try {
-        const raw = fs.readFileSync(filePath, "utf-8");
-        const data = JSON.parse(raw);
-        if (!data || typeof data !== "object") return;
+    const validExts = new Set([".md", ".json", ".yaml", ".yml"]);
 
-        if (data.model_profiles && typeof data.model_profiles === "object") {
-          for (const key of Object.keys(data.model_profiles)) {
-            if (typeof key === "string") candidateSet.add(key);
-          }
-        }
-
-        if (data.agents) {
-          if (Array.isArray(data.agents)) {
-            for (const item of data.agents) {
-              if (typeof item === "string") {
-                candidateSet.add(item);
-              } else if (item && typeof item === "object") {
-                if (typeof (item as any).name === "string") candidateSet.add((item as any).name);
-                if (typeof (item as any).id === "string") candidateSet.add((item as any).id);
-                if (typeof (item as any).key === "string") candidateSet.add((item as any).key);
-              }
-            }
-          } else if (typeof data.agents === "object") {
-            for (const [key, val] of Object.entries(data.agents)) {
-              if (typeof key === "string") candidateSet.add(key);
-              if (typeof val === "string") {
-                candidateSet.add(val);
-              } else if (val && typeof val === "object") {
-                if (typeof (val as any).name === "string") candidateSet.add((val as any).name);
-                if (typeof (val as any).id === "string") candidateSet.add((val as any).id);
-                if (typeof (val as any).key === "string") candidateSet.add((val as any).key);
-              }
-            }
-          }
-        }
-      } catch {
-        // Ignore unreadable / malformed files
-      }
-    };
-
-    collectFromConfig(this.projectSubagentsPath);
-    collectFromConfig(this.globalSubagentsPath);
-
+    // 1. Filesystem: collect real agent definitions (.pi/agents and ~/.pi/agent/agents)
     const collectFromAgentsDirectory = (dirPath: string) => {
       if (!fs.existsSync(dirPath)) return;
       try {
         const entries = fs.readdirSync(dirPath, { withFileTypes: true });
-        const validExts = new Set([".md", ".json", ".yaml", ".yml"]);
         for (const entry of entries) {
           if (!entry.isFile()) continue;
           const ext = path.extname(entry.name).toLowerCase();
@@ -393,7 +374,7 @@ export class SddProfileManager {
           const agentName = path.basename(entry.name, path.extname(entry.name));
           if (agentName.startsWith(".")) continue;
           if (isSyntheticAgentKey(agentName)) continue;
-          candidateSet.add(agentName);
+          filesystemAgents.add(agentName);
         }
       } catch {
         // Ignore unreadable directories
@@ -405,13 +386,100 @@ export class SddProfileManager {
     collectFromAgentsDirectory(projectAgentsDir);
     collectFromAgentsDirectory(globalAgentsDir);
 
+    for (const agent of filesystemAgents) {
+      candidateSet.add(agent);
+    }
+
+    // 2. Runtime configuration: collect declared subagents from subagents.json & settings.json
+    const collectFromConfig = (filePath: string) => {
+      if (!fs.existsSync(filePath)) return;
+      try {
+        const raw = fs.readFileSync(filePath, "utf-8");
+        const data = JSON.parse(raw);
+        if (!data || typeof data !== "object") return;
+
+        if (data.model_profiles && typeof data.model_profiles === "object") {
+          for (const key of Object.keys(data.model_profiles)) {
+            if (typeof key === "string" && !isSyntheticAgentKey(key)) {
+              configAgents.add(key);
+            }
+          }
+        }
+
+        const extractFromAgentList = (items: unknown) => {
+          if (Array.isArray(items)) {
+            for (const item of items) {
+              if (typeof item === "string" && !isSyntheticAgentKey(item)) {
+                configAgents.add(item);
+              } else if (item && typeof item === "object") {
+                const name = (item as any).name || (item as any).id || (item as any).key;
+                if (typeof name === "string" && !isSyntheticAgentKey(name)) {
+                  configAgents.add(name);
+                }
+              }
+            }
+          } else if (items && typeof items === "object") {
+            for (const [key, val] of Object.entries(items)) {
+              if (typeof key === "string" && !isSyntheticAgentKey(key)) {
+                configAgents.add(key);
+              }
+              if (typeof val === "string" && !isSyntheticAgentKey(val)) {
+                configAgents.add(val);
+              } else if (val && typeof val === "object") {
+                const name = (val as any).name || (val as any).id || (val as any).key;
+                if (typeof name === "string" && !isSyntheticAgentKey(name)) {
+                  configAgents.add(name);
+                }
+              }
+            }
+          }
+        };
+
+        if (data.agents) extractFromAgentList(data.agents);
+        if (data.subagents) extractFromAgentList(data.subagents);
+      } catch {
+        // Ignore unreadable / malformed files
+      }
+    };
+
+    collectFromConfig(this.projectSubagentsPath);
+    collectFromConfig(this.globalSubagentsPath);
+
+    const projectSettingsPath = path.join(path.dirname(this.projectSubagentsPath), "settings.json");
+    const globalSettingsPath = path.join(path.dirname(this.globalSubagentsPath), "settings.json");
+    collectFromConfig(projectSettingsPath);
+    collectFromConfig(globalSettingsPath);
+
+    for (const agent of configAgents) {
+      candidateSet.add(agent);
+    }
+
+    // 3. Stored profiles & currentProfile validation:
+    // Only retain keys if in ALL_KNOWN_AGENTS, filesystem, or declared in runtime config,
+    // or custom agents defined in custom profiles that are not orphaned legacy keys.
+    const knownSet = new Set<string>(ALL_KNOWN_AGENTS);
+
+    const isRetainableProfileKey = (key: string, isBuiltinProfile: boolean): boolean => {
+      if (!key || typeof key !== "string" || isSyntheticAgentKey(key)) return false;
+      if (knownSet.has(key)) return false;
+      if (filesystemAgents.has(key)) return true;
+      if (configAgents.has(key)) return true;
+      if (isBuiltinProfile) return false;
+      // Do not accept orphaned legacy sdd-* keys if they don't exist on disk or in config
+      if (LEGACY_SDD_AGENTS.has(key) || key.startsWith("sdd-")) return false;
+      return true;
+    };
+
     try {
       const summaries = this.storage.listProfiles();
       for (const summary of summaries) {
+        const isBuiltin = summary.scope === "builtin";
         const prof = this.storage.loadProfile(summary.name);
         if (prof?.model_profiles && typeof prof.model_profiles === "object") {
           for (const key of Object.keys(prof.model_profiles)) {
-            if (typeof key === "string") candidateSet.add(key);
+            if (isRetainableProfileKey(key, isBuiltin)) {
+              candidateSet.add(key);
+            }
           }
         }
       }
@@ -421,15 +489,19 @@ export class SddProfileManager {
 
     if (currentProfile?.model_profiles && typeof currentProfile.model_profiles === "object") {
       for (const key of Object.keys(currentProfile.model_profiles)) {
-        if (typeof key === "string") candidateSet.add(key);
+        if (isRetainableProfileKey(key, false)) {
+          candidateSet.add(key);
+        }
       }
     }
 
-    const knownSet = new Set<string>(ALL_KNOWN_AGENTS);
     const result: string[] = [];
-
     for (const key of candidateSet) {
-      if (!knownSet.has(key) && !isSyntheticAgentKey(key)) {
+      if (
+        !knownSet.has(key) &&
+        !LEGACY_SDD_AGENTS.has(key) &&
+        !isSyntheticAgentKey(key)
+      ) {
         result.push(key);
       }
     }
@@ -452,3 +524,5 @@ export class SddProfileManager {
     return this.getCategories(currentProfile).flatMap((c) => c.agents);
   }
 }
+
+export { SddProfileManager as ProfileManager };
