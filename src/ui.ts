@@ -1,5 +1,5 @@
 import type { ModelProfileEntry, Profile, ProfileSummary, ReasoningEffort } from "./types.js";
-import { ALL_KNOWN_AGENTS, SDD_AGENT_CATEGORIES } from "./catalog.js";
+import { ALL_KNOWN_AGENTS, SDD_AGENT_CATEGORIES, resolveCategories } from "./catalog.js";
 import type { SddProfileManager } from "./manager.js";
 import { resolveAvailableModels } from "./models-resolver.js";
 
@@ -128,7 +128,7 @@ export function formatProfileDetail(profile: Profile, isActive = false, manager?
   const assigned = profile.model_profiles || {};
   const categories = manager?.getCategories
     ? manager.getCategories(profile)
-    : SDD_AGENT_CATEGORIES;
+    : resolveCategories(Object.keys(assigned));
 
   for (const category of categories) {
     lines.push(`\n**${category.name}** (${category.description}):`);

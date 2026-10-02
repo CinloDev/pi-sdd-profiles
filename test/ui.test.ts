@@ -67,8 +67,28 @@ describe("ui formatting module", () => {
     expect(output).toContain("`sdd-explore`: `cpamc/cinlo/gemini-3.8-flash-high` (effort: low)");
     expect(output).toContain("Judgment Day");
     expect(output).toContain("`jd-judge-a`");
-    expect(output).toContain("Otros Agentes");
+    expect(output).toContain("Custom Agents");
     expect(output).toContain("`custom-special`");
+  });
+
+  it("should format uncategorized agents under Otros Agentes when categories do not include them", () => {
+    const profile: Profile = {
+      name: "cinlo-fallback",
+      default_model: "test-model",
+      model_profiles: {
+        "unmatched-agent": { model: "special-model", effort: "low" },
+      },
+    };
+
+    const mockManager = {
+      getCategories: () => [
+        { id: "odd-core", name: "ODD Core", description: "ODD Core agents", agents: ["gentle-ai-worker"] },
+      ],
+    };
+
+    const output = formatProfileDetail(profile, false, mockManager as any);
+    expect(output).toContain("Otros Agentes:");
+    expect(output).toContain("`unmatched-agent`: `special-model` (effort: low)");
   });
 
   it("should guide profile creation via interactive wizard with model select dropdown", async () => {
