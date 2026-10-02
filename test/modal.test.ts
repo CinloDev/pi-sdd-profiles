@@ -1861,4 +1861,106 @@ describe("modal overlay component", () => {
       expect(profileData.model_profiles["tester-ai"].model).toBe("anthropic/claude-sonnet-4-5");
     });
   });
+
+  describe("empty state behavior (no profiles)", () => {
+    const emptyManager: any = {
+      listProfiles: vi.fn(() => []),
+      getActiveProfileName: vi.fn(() => undefined),
+      getProfile: vi.fn(() => null),
+      createProfile: vi.fn(() => ({ success: true })),
+      deleteProfile: vi.fn(() => true),
+      getCategories: vi.fn(() => SDD_AGENT_CATEGORIES),
+      getAllAgents: vi.fn(() => ALL_KNOWN_AGENTS),
+    };
+
+    it("should render the empty state in Column 1 and onboarding explanations in Columns 2 and 3", () => {
+      const done = vi.fn();
+      const modal = createSddProfilesModal({
+        manager: emptyManager,
+        availableModels: [
+          "anthropic/claude-sonnet-4-5",
+          "openai/o3-mini",
+        ],
+        done,
+      });
+
+      const lines = modal.render(100);
+      const content = lines.join("\n");
+
+      // Column 1 empty state (Column 1 width is capped at 22, text is displayed cleanly)
+      expect(content).toContain("No hay perfiles");
+      expect(content).toContain("Presioná [n] para");
+      expect(content).toContain("crear tu primer per");
+
+      // Header should show › Perfiles (0) and not (1/0)
+      expect(content).toContain("› Perfiles (0)");
+      expect(content).not.toContain("(1/0)");
+
+      // Columns 2 and 3 onboarding explanations
+      expect(content).toContain("Acá vas a ver los subagentes");
+      expect(content).toContain("Tocá [n] para empezar.");
+      expect(content).toContain("Configuración de");
+      expect(content).toContain("por cada subagente.");
+    });
+
+    it("should keep activePane on profiles when pressing Right, Tab, or e", () => {
+      const done = vi.fn();
+      const modal = createSddProfilesModal({
+        manager: emptyManager,
+        availableModels: [
+          "anthropic/claude-sonnet-4-5",
+          "openai/o3-mini",
+        ],
+        done,
+      });
+
+      let lines = modal.render(100);
+      expect(lines.join("\n")).toContain("Panel activo: Perfiles");
+
+      // Press Right arrow (\u001b[C)
+      modal.handleInput("\u001b[C");
+      lines = modal.render(100);
+      expect(lines.join("\n")).toContain("Panel activo: Perfiles");
+      expect(lines.join("\n")).not.toContain("Panel activo: Agentes");
+
+      // Press Tab (\t)
+      modal.handleInput("\t");
+      lines = modal.render(100);
+      expect(lines.join("\n")).toContain("Panel activo: Perfiles");
+      expect(lines.join("\n")).not.toContain("Panel activo: Agentes");
+
+      // Press 'e'
+      modal.handleInput("e");
+      lines = modal.render(100);
+      expect(lines.join("\n")).toContain("Panel activo: Perfiles");
+      expect(lines.join("\n")).not.toContain("Panel activo: Agentes");
+    });
+
+    it("should open create profile dialog cleanly on 'n'", () => {
+      const done = vi.fn();
+      const modal = createSddProfilesModal({
+        manager: emptyManager,
+        availableModels: [
+          "anthropic/claude-sonnet-4-5",
+          "openai/o3-mini",
+        ],
+        done,
+      });
+
+      // Press 'n' to open create profile dialog
+      modal.handleInput("n");
+      const lines = modal.render(100);
+      const content = lines.join("\n");
+
+      expect(content).toContain("Nuevo Perfil SDD");
+      expect(content).toContain("Crear un nuevo perfil de modelos SDD y Orquestador:");
+      expect(content).toContain("Nombre:");
+
+      // Esc cleanly returns back to empty state
+      modal.handleInput("\u001b");
+      const returnLines = modal.render(100);
+      expect(returnLines.join("\n")).toContain("› Perfiles (0)");
+      expect(returnLines.join("\n")).toContain("No hay perfiles");
+    });
+  });
 });

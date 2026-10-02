@@ -784,9 +784,11 @@ export function createSddProfilesModal(input: ModalInput) {
     const colWidths = computeThreeColumnWidths(contentWidth);
 
     // Column Headers
-    const col1Header = activePane === "profiles"
-      ? `${cHighlight("› Perfiles")} ${cSecondary(`(${selectedProfileIndex + 1}/${profiles.length})`)}`
-      : `${cHeading("  Perfiles")} ${cDim(`(${profiles.length})`)}`;
+    const col1Header = profiles.length === 0
+      ? (activePane === "profiles" ? `${cHighlight("› Perfiles")} ${cSecondary("(0)")}` : `${cHeading("  Perfiles")} ${cDim("(0)")}`)
+      : (activePane === "profiles"
+          ? `${cHighlight("› Perfiles")} ${cSecondary(`(${selectedProfileIndex + 1}/${profiles.length})`)}`
+          : `${cHeading("  Perfiles")} ${cDim(`(${profiles.length})`)}`);
 
     const profTag = currentSummary ? `[${currentSummary.name}]` : "";
     const col2Header = activePane === "agents"
@@ -799,7 +801,9 @@ export function createSddProfilesModal(input: ModalInput) {
 
     const col1Lines: string[] = [];
     if (profiles.length === 0) {
-      col1Lines.push(cMuted("Sin perfiles. Presioná 'n'"));
+      col1Lines.push(cMuted("No hay perfiles creados."));
+      col1Lines.push(cHighlight("Presioná [n] para"));
+      col1Lines.push(cHighlight("crear tu primer perfil."));
     } else {
       for (let offset = 0; offset < maxVisible; offset++) {
         const idx = profileScrollOffset + offset;
@@ -823,87 +827,101 @@ export function createSddProfilesModal(input: ModalInput) {
     }
 
     const col2Lines: string[] = [];
-    for (let offset = 0; offset < maxVisible; offset++) {
-      const idx = agentScrollOffset + offset;
-      if (idx < visibleTreeItems.length) {
-        const item = visibleTreeItems[idx];
-        const isSelected = idx === selectedAgentIndex;
-        const cursor = isSelected
-          ? (activePane === "agents" ? cHighlight("› ") : cAccent("▸ "))
-          : "  ";
+    if (profiles.length === 0) {
+      col2Lines.push(cMuted("Acá vas a ver los subagentes"));
+      col2Lines.push(cMuted("y orquestador asignados"));
+      col2Lines.push(cMuted("a tu perfil."));
+      col2Lines.push("");
+      col2Lines.push(cDim("Tocá [n] para empezar."));
+    } else {
+      for (let offset = 0; offset < maxVisible; offset++) {
+        const idx = agentScrollOffset + offset;
+        if (idx < visibleTreeItems.length) {
+          const item = visibleTreeItems[idx];
+          const isSelected = idx === selectedAgentIndex;
+          const cursor = isSelected
+            ? (activePane === "agents" ? cHighlight("› ") : cAccent("▸ "))
+            : "  ";
 
-        if (item.type === "orchestrator") {
-          const modelRaw = currentFullProfile?.default_model;
-          const modelLabel = modelRaw ? cModel(shortenModel(modelRaw, Math.max(8, colWidths.col2 - 18))) : cDim("(no def)");
-          const label = isSelected ? cBold(cAccent("👑 Orquestador")) : cHeading("👑 Orquestador");
-          col2Lines.push(`${cursor}${label} ${cBorderMuted("·")} ${modelLabel}`);
-        } else if (item.type === "all-subagents") {
-          const shortAction = "⚡ Asignar un mismo modelo a TODOS";
-          const label = isSelected ? cBold(cHighlight(shortAction)) : cWarning(shortAction);
-          col2Lines.push(`${cursor}${label}`);
-        } else if (item.type === "all-effort") {
-          const shortAction = "🧠 Esfuerzo a todos los subagentes";
-          const label = isSelected ? cBold(cHighlight(shortAction)) : cWarning(shortAction);
-          col2Lines.push(`${cursor}${label}`);
-        } else if (item.type === "category") {
-          const cat = item.category!;
-          const isExpanded = expandedCategories.has(cat.id);
-          const foldIcon = isExpanded ? "▼" : "►";
-          let sharedModel: string | null = null;
-          if (currentFullProfile) {
-            const models = cat.agents.map(
-              (ag) => currentFullProfile.model_profiles[ag]?.model ?? currentFullProfile.default_model ?? "default"
-            );
-            if (models.length > 0 && models.every((m) => m === models[0])) {
-              sharedModel = models[0];
+          if (item.type === "orchestrator") {
+            const modelRaw = currentFullProfile?.default_model;
+            const modelLabel = modelRaw ? cModel(shortenModel(modelRaw, Math.max(8, colWidths.col2 - 18))) : cDim("(no def)");
+            const label = isSelected ? cBold(cAccent("👑 Orquestador")) : cHeading("👑 Orquestador");
+            col2Lines.push(`${cursor}${label} ${cBorderMuted("·")} ${modelLabel}`);
+          } else if (item.type === "all-subagents") {
+            const shortAction = "⚡ Asignar un mismo modelo a TODOS";
+            const label = isSelected ? cBold(cHighlight(shortAction)) : cWarning(shortAction);
+            col2Lines.push(`${cursor}${label}`);
+          } else if (item.type === "all-effort") {
+            const shortAction = "🧠 Esfuerzo a todos los subagentes";
+            const label = isSelected ? cBold(cHighlight(shortAction)) : cWarning(shortAction);
+            col2Lines.push(`${cursor}${label}`);
+          } else if (item.type === "category") {
+            const cat = item.category!;
+            const isExpanded = expandedCategories.has(cat.id);
+            const foldIcon = isExpanded ? "▼" : "►";
+            let sharedModel: string | null = null;
+            if (currentFullProfile) {
+              const models = cat.agents.map(
+                (ag) => currentFullProfile.model_profiles[ag]?.model ?? currentFullProfile.default_model ?? "default"
+              );
+              if (models.length > 0 && models.every((m) => m === models[0])) {
+                sharedModel = models[0];
+              }
             }
+            const badge = sharedModel
+              ? ` ${cBorderMuted("·")} ${cModel(shortenModel(sharedModel, Math.max(6, colWidths.col2 - item.name.length - 12)))}`
+              : ` ${cSecondary(`(${cat.agents.length})`)}`;
+            const label = isSelected
+              ? cBold(cHighlight(`${foldIcon} 📦 ${item.name}`))
+              : cAccent(`${foldIcon} 📦 ${item.name}`);
+            col2Lines.push(`${cursor}${label}${badge}`);
+          } else {
+            const assignment = currentFullProfile?.model_profiles[item.id];
+            const isExplicit = !!assignment?.model;
+            const rawModel = assignment?.model ?? currentFullProfile?.default_model ?? "default";
+            const maxModelLen = Math.max(8, colWidths.col2 - item.name.length - 8);
+            const modelLabel = isExplicit
+              ? cModel(shortenModel(rawModel, maxModelLen))
+              : cDim(shortenModel(rawModel, maxModelLen));
+            const label = isSelected ? cBold(cText(`  ${item.name}`)) : cMuted(`  ${item.name}`);
+            col2Lines.push(`${cursor}${label} ${cBorderMuted("·")} ${modelLabel}`);
           }
-          const badge = sharedModel
-            ? ` ${cBorderMuted("·")} ${cModel(shortenModel(sharedModel, Math.max(6, colWidths.col2 - item.name.length - 12)))}`
-            : ` ${cSecondary(`(${cat.agents.length})`)}`;
-          const label = isSelected
-            ? cBold(cHighlight(`${foldIcon} 📦 ${item.name}`))
-            : cAccent(`${foldIcon} 📦 ${item.name}`);
-          col2Lines.push(`${cursor}${label}${badge}`);
         } else {
-          const assignment = currentFullProfile?.model_profiles[item.id];
-          const isExplicit = !!assignment?.model;
-          const rawModel = assignment?.model ?? currentFullProfile?.default_model ?? "default";
-          const maxModelLen = Math.max(8, colWidths.col2 - item.name.length - 8);
-          const modelLabel = isExplicit
-            ? cModel(shortenModel(rawModel, maxModelLen))
-            : cDim(shortenModel(rawModel, maxModelLen));
-          const label = isSelected ? cBold(cText(`  ${item.name}`)) : cMuted(`  ${item.name}`);
-          col2Lines.push(`${cursor}${label} ${cBorderMuted("·")} ${modelLabel}`);
+          col2Lines.push("");
         }
-      } else {
-        col2Lines.push("");
       }
     }
 
     const col3Lines: string[] = [];
-    for (let offset = 0; offset < maxVisible; offset++) {
-      if (offset < col3Options.length) {
-        const opt = col3Options[offset];
-        const isFocused = offset === selectedEffortIndex;
-        const isCurrent = opt === currentAgentEffort;
-        const cursor = (activePane === "effort" && isFocused)
-          ? cHighlight("› ")
-          : "  ";
-        const radio = isCurrent ? cSuccess("● ") : cDim("○ ");
-        const optLabel = isCurrent
-          ? cBold(cSuccess(opt))
-          : (isFocused ? cAccent(opt) : cText(opt));
+    if (profiles.length === 0) {
+      col3Lines.push(cMuted("Configuración de modelos"));
+      col3Lines.push(cMuted("y niveles de esfuerzo"));
+      col3Lines.push(cMuted("por cada subagente."));
+    } else {
+      for (let offset = 0; offset < maxVisible; offset++) {
+        if (offset < col3Options.length) {
+          const opt = col3Options[offset];
+          const isFocused = offset === selectedEffortIndex;
+          const isCurrent = opt === currentAgentEffort;
+          const cursor = (activePane === "effort" && isFocused)
+            ? cHighlight("› ")
+            : "  ";
+          const radio = isCurrent ? cSuccess("● ") : cDim("○ ");
+          const optLabel = isCurrent
+            ? cBold(cSuccess(opt))
+            : (isFocused ? cAccent(opt) : cText(opt));
 
-        const badge =
-          opt === "max" || opt === "high" || opt === "xhigh" ? cAccent(" 🧠") :
-          opt === "default" ? cDim(" (auto)") : "";
+          const badge =
+            opt === "max" || opt === "high" || opt === "xhigh" ? cAccent(" 🧠") :
+            opt === "default" ? cDim(" (auto)") : "";
 
-        col3Lines.push(`${cursor}${radio}${optLabel}${badge}`);
-      } else if (offset === col3Options.length && col3Options.length === 1 && col3Options[0] === "default") {
-        col3Lines.push(cDim("  (sin razonamiento)"));
-      } else {
-        col3Lines.push("");
+          col3Lines.push(`${cursor}${radio}${optLabel}${badge}`);
+        } else if (offset === col3Options.length && col3Options.length === 1 && col3Options[0] === "default") {
+          col3Lines.push(cDim("  (sin razonamiento)"));
+        } else {
+          col3Lines.push("");
+        }
       }
     }
 
@@ -929,26 +947,28 @@ export function createSddProfilesModal(input: ModalInput) {
           xEnd: col1XEnd,
         });
       }
-      const aIdx = agentScrollOffset + offset;
-      if (aIdx < visibleTreeItems.length) {
-        clickTargets.push({
-          y: currentBodyStartY + rowY,
-          type: "item",
-          pane: 1,
-          index: aIdx,
-          xStart: col2XStart,
-          xEnd: col2XEnd,
-        });
-      }
-      if (offset < col3Options.length) {
-        clickTargets.push({
-          y: currentBodyStartY + rowY,
-          type: "item",
-          pane: 2,
-          index: offset,
-          xStart: col3XStart,
-          xEnd: col3XEnd,
-        });
+      if (profiles.length > 0) {
+        const aIdx = agentScrollOffset + offset;
+        if (aIdx < visibleTreeItems.length) {
+          clickTargets.push({
+            y: currentBodyStartY + rowY,
+            type: "item",
+            pane: 1,
+            index: aIdx,
+            xStart: col2XStart,
+            xEnd: col2XEnd,
+          });
+        }
+        if (offset < col3Options.length) {
+          clickTargets.push({
+            y: currentBodyStartY + rowY,
+            type: "item",
+            pane: 2,
+            index: offset,
+            xStart: col3XStart,
+            xEnd: col3XEnd,
+          });
+        }
       }
     }
 
@@ -2167,7 +2187,9 @@ export function createSddProfilesModal(input: ModalInput) {
       // --- Main 3-Column Dashboard / Profile Editor View ---
       // Tab / Shift-Tab cycle panels
       if (key === "tab") {
-        if (activePane === "profiles") activePane = "agents";
+        if (activePane === "profiles") {
+          if (profiles.length > 0) activePane = "agents";
+        }
         else if (activePane === "agents") activePane = "effort";
         else activePane = "profiles";
         requestRender();
@@ -2176,7 +2198,9 @@ export function createSddProfilesModal(input: ModalInput) {
       if (key === "backtab") {
         if (activePane === "effort") activePane = "agents";
         else if (activePane === "agents") activePane = "profiles";
-        else activePane = "effort";
+        else {
+          if (profiles.length > 0) activePane = "effort";
+        }
         requestRender();
         return;
       }
@@ -2198,7 +2222,9 @@ export function createSddProfilesModal(input: ModalInput) {
       }
       if (key === "right" || key === "l") {
         if (activePane === "profiles") {
-          activePane = "agents";
+          if (profiles.length > 0) {
+            activePane = "agents";
+          }
         } else if (activePane === "agents") {
           const item = selectedTreeItem();
           if (item && item.type === "category" && item.category && !expandedCategories.has(item.category.id)) {
@@ -2344,9 +2370,13 @@ export function createSddProfilesModal(input: ModalInput) {
 
       // Action shortcuts
       if (key === "e") {
-        if (activePane === "profiles") activePane = "agents";
+        if (activePane === "profiles") {
+          if (profiles.length > 0) activePane = "agents";
+        }
         else if (activePane === "agents") activePane = "effort";
-        else activePane = "agents";
+        else {
+          if (profiles.length > 0) activePane = "agents";
+        }
         requestRender();
         return;
       }
@@ -2481,6 +2511,11 @@ export function createSddProfilesModal(input: ModalInput) {
         const { x } = event;
 
         if (view === "profiles-list" || view === "profile-editor") {
+          if (profiles.length === 0) {
+            activePane = "profiles";
+            requestRender();
+            return { handled: true, render: true };
+          }
           const paddingX = 2;
           const contentWidth = Math.max(1, (event.width || 80) - 2 - paddingX * 2);
           const colWidths = computeThreeColumnWidths(contentWidth);
